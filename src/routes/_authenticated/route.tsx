@@ -7,6 +7,8 @@ import { sodiumReady } from "@/lib/crypto";
 import { takePendingInvite } from "@/lib/pending-invite";
 import { joinByInvite } from "@/lib/contacts.functions";
 import { toast } from "sonner";
+import { OnboardingPrompt } from "@/components/onboarding-prompt";
+import { installBadgeResetOnForeground } from "@/lib/badge";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
