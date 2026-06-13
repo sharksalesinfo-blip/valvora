@@ -388,7 +388,7 @@ function ChatView() {
             <span className="truncate">{title}</span>
             {directState?.kind === "verified" && (
               <span title="Geverifieerd op dit toestel">
-                <ShieldCheck className="w-4 h-4 text-green-300 shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
               </span>
             )}
           </div>
