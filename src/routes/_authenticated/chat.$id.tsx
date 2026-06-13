@@ -89,6 +89,7 @@ function ChatView() {
   // Sleutel laden
   useEffect(() => {
     sodiumReady().then(() => loadPrivateKey(user.id)).then(setPrivKey);
+    void clearAppBadge();
   }, [user.id]);
 
   // Conversation + members laden
