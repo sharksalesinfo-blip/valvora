@@ -1,11 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/format";
 import { toast } from "sonner";
+import { createGroupConversation } from "@/lib/conversations.functions";
 
 export const Route = createFileRoute("/_authenticated/groups/new")({
   component: NewGroup,
@@ -39,23 +41,20 @@ function NewGroup() {
     });
   }
 
+  const callCreateGroup = useServerFn(createGroupConversation);
+
   async function create() {
     if (!name.trim()) return toast.error("Geef de groep een naam");
     if (picked.size === 0) return toast.error("Kies minstens één deelnemer");
     setBusy(true);
     try {
-      const { data: conv, error } = await supabase
-        .from("conversations")
-        .insert({ type: "group", name: name.trim(), created_by: user.id })
-        .select("id")
-        .single();
-      if (error || !conv) throw error ?? new Error("Kon groep niet aanmaken");
-      const memRows = [{ conversation_id: conv.id, user_id: user.id }, ...Array.from(picked).map((uid) => ({ conversation_id: conv.id, user_id: uid }))];
-      const { error: mErr } = await supabase.from("conversation_members").insert(memRows);
-      if (mErr) throw mErr;
-      nav({ to: "/chat/$id", params: { id: conv.id } });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Mislukt");
+      const r = await callCreateGroup({
+        data: { name: name.trim(), member_ids: Array.from(picked) },
+      });
+      nav({ to: "/chat/$id", params: { id: r.id } });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Mislukt";
+      toast.error(msg);
     } finally {
       setBusy(false);
     }

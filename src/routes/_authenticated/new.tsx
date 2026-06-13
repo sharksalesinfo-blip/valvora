@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/format";
 import { toast } from "sonner";
 import { addByHandle, getMyInvite } from "@/lib/contacts.functions";
+import { createDirectConversation } from "@/lib/conversations.functions";
 import { buildInviteUrl } from "@/lib/pending-invite";
 
 export const Route = createFileRoute("/_authenticated/new")({
@@ -33,6 +34,7 @@ function NewChat() {
 
   const callAddByHandle = useServerFn(addByHandle);
   const fetchInvite = useServerFn(getMyInvite);
+  const callCreateDirect = useServerFn(createDirectConversation);
 
   async function loadContacts() {
     const { data: rows } = await supabase
@@ -63,42 +65,13 @@ function NewChat() {
       toast.error(`${p.display_name} heeft nog geen sleutel — vraag ze de app even te openen.`);
       return;
     }
-    const { data: mine } = await supabase
-      .from("conversation_members")
-      .select("conversation_id, conversations!inner(type)")
-      .eq("user_id", user.id);
-    const myDirectIds = (mine ?? [])
-      .filter((m: { conversations?: { type?: string } }) => m.conversations?.type === "direct")
-      .map((m) => m.conversation_id);
-    if (myDirectIds.length) {
-      const { data: theirs } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("user_id", p.id)
-        .in("conversation_id", myDirectIds);
-      if (theirs && theirs.length) {
-        nav({ to: "/chat/$id", params: { id: theirs[0].conversation_id } });
-        return;
-      }
+    try {
+      const r = await callCreateDirect({ data: { other_user_id: p.id } });
+      nav({ to: "/chat/$id", params: { id: r.id } });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Kon gesprek niet aanmaken";
+      toast.error(msg);
     }
-    const { data: conv, error } = await supabase
-      .from("conversations")
-      .insert({ type: "direct", created_by: user.id })
-      .select("id")
-      .single();
-    if (error || !conv) {
-      toast.error(error?.message ?? "Kon gesprek niet aanmaken");
-      return;
-    }
-    const { error: memErr } = await supabase.from("conversation_members").insert([
-      { conversation_id: conv.id, user_id: user.id },
-      { conversation_id: conv.id, user_id: p.id },
-    ]);
-    if (memErr) {
-      toast.error(memErr.message);
-      return;
-    }
-    nav({ to: "/chat/$id", params: { id: conv.id } });
   }
 
   async function addHandle() {
