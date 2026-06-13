@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { parseQrPayload, markVerified } from "@/lib/verification";
 import { addVerifiedContact } from "@/lib/contacts.functions";
