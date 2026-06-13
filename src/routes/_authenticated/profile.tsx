@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy, Bell } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { publicKeyFingerprint } from "@/lib/crypto";
+import { KeyQrCode } from "@/components/key-qr-code";
 import {
   getPushStatus,
   isSubscribed,
