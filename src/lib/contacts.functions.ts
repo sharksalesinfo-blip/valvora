@@ -162,18 +162,24 @@ export const addByHandle = createServerFn({ method: "POST" })
     return { handle: h };
   })
   .handler(async ({ data, context }) => {
+    // Uniforme respons: een buitenstaander kan uit { ok: true, added: false }
+    // niet afleiden of de handle bestaat of niet — beide paden hebben dezelfde
+    // responsvorm en geven geen fout terug. De UI toont in beide gevallen een
+    // neutrale "Geen resultaat" boodschap als added=false.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: prof } = await supabaseAdmin
       .from("profiles")
       .select("id, display_name")
       .ilike("handle", data.handle)
       .maybeSingle();
-    if (!prof) throw new Error("Geen gebruiker met die handle gevonden");
+    if (!prof) {
+      return { ok: true as const, added: false as const, self: false as const, contact_user_id: null, display_name: null };
+    }
     if (prof.id === context.userId) {
-      return { ok: true, contact_user_id: prof.id, display_name: prof.display_name, self: true as const };
+      return { ok: true as const, added: false as const, self: true as const, contact_user_id: prof.id, display_name: prof.display_name };
     }
     await insertMutualContacts(context.userId, prof.id);
-    return { ok: true, contact_user_id: prof.id, display_name: prof.display_name, self: false as const };
+    return { ok: true as const, added: true as const, self: false as const, contact_user_id: prof.id, display_name: prof.display_name };
   });
 
 /**

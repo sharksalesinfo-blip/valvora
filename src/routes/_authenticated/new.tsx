@@ -108,10 +108,13 @@ function NewChat() {
       const r = await callAddByHandle({ data: { handle: handleQuery } });
       if (r.self) {
         toast.info("Dat ben je zelf 🙂");
-      } else {
+      } else if (r.added) {
         toast.success(`${r.display_name} toegevoegd`);
         setHandleQuery("");
         await loadContacts();
+      } else {
+        // Uniforme respons: we onthullen niet of de handle bestaat.
+        toast.message("Geen resultaat");
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Toevoegen mislukt";
