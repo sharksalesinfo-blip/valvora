@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { publicKeyFingerprint } from "@/lib/crypto";
+import {
+  getPushStatus,
+  isSubscribed,
+  pushSupported,
+  subscribePush,
+  unsubscribePush,
+} from "@/lib/push";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
@@ -16,6 +24,34 @@ function ProfilePage() {
   const [name, setName] = useState("");
   const [fp, setFp] = useState<string>("");
   const [pk, setPk] = useState<string>("");
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushAvail, setPushAvail] = useState(false);
+
+  useEffect(() => {
+    setPushAvail(pushSupported());
+    (async () => {
+      if (!pushSupported()) return;
+      const status = await getPushStatus();
+      setPushOn(status === "granted" && (await isSubscribed()));
+    })();
+  }, []);
+
+  async function togglePush(on: boolean) {
+    setPushBusy(true);
+    try {
+      if (on) {
+        const ok = await subscribePush(user.id);
+        setPushOn(ok);
+        if (!ok) toast.error("Meldingen niet ingeschakeld");
+      } else {
+        await unsubscribePush();
+        setPushOn(false);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   useEffect(() => {
     supabase
@@ -66,6 +102,24 @@ function ProfilePage() {
               <Copy className="w-4 h-4 mr-1" /> Kopiëren
             </Button>
           )}
+        </section>
+
+        <section className="bg-card border rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Bell className="w-4 h-4 text-primary" /> Pushmeldingen
+            </div>
+            <Switch
+              checked={pushOn}
+              disabled={!pushAvail || pushBusy}
+              onCheckedChange={(v) => void togglePush(v)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Je krijgt alleen een seintje "Nieuw bericht". Berichtinhoud blijft versleuteld en
+            wordt pas in de app ontsleuteld.
+            {!pushAvail && " (Niet ondersteund op dit apparaat)"}
+          </p>
         </section>
 
         <section className="text-xs text-muted-foreground space-y-1">

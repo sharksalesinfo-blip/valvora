@@ -13,6 +13,8 @@ import {
   sodiumReady,
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
+import { notifyConversation } from "@/lib/push";
+import { PushPrompt } from "@/components/push-prompt";
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
@@ -284,6 +286,8 @@ function ChatView() {
     if (error) throw error;
     // bump conversation updated_at
     await supabase.from("conversations").update({ updated_at: created_at }).eq("id", convId);
+    // Stuur neutrale push naar andere leden (fire-and-forget)
+    void notifyConversation(convId);
   }
 
   const title = conv?.type === "group"
@@ -309,6 +313,7 @@ function ChatView() {
         </div>
       </header>
 
+      <PushPrompt userId={user.id} />
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-surface px-3 py-4 space-y-2">
         {messages.map((m, i) => {
           const own = m.sender_id === user.id;
