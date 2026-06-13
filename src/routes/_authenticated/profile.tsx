@@ -24,6 +24,34 @@ function ProfilePage() {
   const [name, setName] = useState("");
   const [fp, setFp] = useState<string>("");
   const [pk, setPk] = useState<string>("");
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushAvail, setPushAvail] = useState(false);
+
+  useEffect(() => {
+    setPushAvail(pushSupported());
+    (async () => {
+      if (!pushSupported()) return;
+      const status = await getPushStatus();
+      setPushOn(status === "granted" && (await isSubscribed()));
+    })();
+  }, []);
+
+  async function togglePush(on: boolean) {
+    setPushBusy(true);
+    try {
+      if (on) {
+        const ok = await subscribePush(user.id);
+        setPushOn(ok);
+        if (!ok) toast.error("Meldingen niet ingeschakeld");
+      } else {
+        await unsubscribePush();
+        setPushOn(false);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   useEffect(() => {
     supabase
