@@ -44,7 +44,7 @@ export async function subscribePush(userId: string): Promise<boolean> {
   const { publicKey } = await getVapidPublicKey();
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
+    applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
   });
   const json = sub.toJSON();
   const { error } = await supabase.from("push_subscriptions").upsert(
