@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="freshTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7CF2DE"/>
+      <stop offset="55%" stop-color="#5EEAD4"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="inkMark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16314A"/>
+      <stop offset="100%" stop-color="#0E1B2A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- fresh tile -->
+  <rect width="512" height="512" rx="116" fill="url(#freshTile)"/>
+
+  <!-- besloten kamer: rounded enclosure in deep ink -->
+  <rect x="96" y="96" width="320" height="320" rx="92" fill="none" stroke="url(#inkMark)" stroke-width="22" opacity="0.40"/>
+
+  <!-- bold V (chamber keystone) -->
+  <path d="M170 178 L256 358 L342 178"
+        fill="none" stroke="url(#inkMark)" stroke-width="46"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- keystone dot -->
+  <circle cx="256" cy="170" r="17" fill="#0E1B2A"/>
+</svg>

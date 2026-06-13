@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Lock } from "lucide-react";
+
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -55,11 +55,10 @@ function AuthPage() {
     <div className="min-h-dvh flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-3">
-            <Lock className="w-6 h-6" />
-          </div>
-          <h1 className="text-2xl font-semibold">Versleutelde Chat</h1>
-          <p className="text-sm text-muted-foreground mt-1">End-to-end versleuteld. Alleen jij en de ontvanger lezen mee.</p>
+          <img src="/icon-192.png" alt="valvora" className="mx-auto w-16 h-16 rounded-2xl mb-3 shadow-sm" />
+          <h1 className="text-2xl font-semibold tracking-tight">valvora</h1>
+          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground mt-1">versleuteld · besloten</p>
+          <p className="text-sm text-muted-foreground mt-2">End-to-end versleuteld. Alleen jij en de ontvanger lezen mee.</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4 bg-card border rounded-2xl p-6 shadow-sm">

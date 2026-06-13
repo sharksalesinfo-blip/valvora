@@ -133,7 +133,7 @@ function ProfilePage() {
 
   async function shareInvite() {
     if (!inviteUrl) return;
-    const text = `Voeg me toe in de versleutelde chat: ${inviteUrl}`;
+    const text = `Voeg me toe op valvora: ${inviteUrl}`;
     if (typeof navigator !== "undefined" && "share" in navigator) {
       try {
         await navigator.share({ title: "Uitnodiging", text, url: inviteUrl });
