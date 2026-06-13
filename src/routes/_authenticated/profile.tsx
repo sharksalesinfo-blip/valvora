@@ -104,6 +104,24 @@ function ProfilePage() {
           )}
         </section>
 
+        <section className="bg-card border rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Bell className="w-4 h-4 text-primary" /> Pushmeldingen
+            </div>
+            <Switch
+              checked={pushOn}
+              disabled={!pushAvail || pushBusy}
+              onCheckedChange={(v) => void togglePush(v)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Je krijgt alleen een seintje "Nieuw bericht". Berichtinhoud blijft versleuteld en
+            wordt pas in de app ontsleuteld.
+            {!pushAvail && " (Niet ondersteund op dit apparaat)"}
+          </p>
+        </section>
+
         <section className="text-xs text-muted-foreground space-y-1">
           <p>📱 Je privésleutel staat alleen op dit apparaat (IndexedDB).</p>
           <p>🔒 De server slaat alleen versleutelde berichten op.</p>
