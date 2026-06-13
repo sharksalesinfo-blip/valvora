@@ -126,6 +126,36 @@ function ChatView() {
     return m;
   }, [members]);
 
+  const otherMembers = useMemo(
+    () => members.filter((m) => m.user_id !== user.id),
+    [members, user.id],
+  );
+
+  // Reconcile verificaties met huidige publieke sleutels (lokaal, server beslist niets).
+  const reconcile = useCallback(async () => {
+    if (otherMembers.length === 0) return;
+    const cached = await loadVerifications(
+      user.id,
+      otherMembers.map((m) => m.user_id),
+    );
+    const next = new Map<string, VerificationState>();
+    for (const m of otherMembers) {
+      const state = await reconcileVerification(
+        user.id,
+        m.user_id,
+        m.public_key,
+        cached.get(m.user_id),
+      );
+      next.set(m.user_id, state);
+    }
+    setVerification(next);
+  }, [otherMembers, user.id]);
+
+  useEffect(() => {
+    void reconcile();
+  }, [reconcile]);
+
+
   // Berichten laden + realtime
   useEffect(() => {
     if (!privKey) return;
