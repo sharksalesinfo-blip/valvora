@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Send, Paperclip, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Send, Paperclip, ShieldCheck, ShieldAlert, ShieldQuestion, QrCode, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatTime, initials } from "@/lib/format";
 import { toast } from "sonner";
@@ -15,6 +15,12 @@ import {
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { notifyConversation } from "@/lib/push";
 import { PushPrompt } from "@/components/push-prompt";
+import { VerifyContactDialog } from "@/components/verify-contact-dialog";
+import {
+  loadVerifications,
+  reconcileVerification,
+  type VerificationState,
+} from "@/lib/verification";
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
