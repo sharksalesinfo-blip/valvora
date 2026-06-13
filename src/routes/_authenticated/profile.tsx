@@ -26,11 +26,29 @@ export const Route = createFileRoute("/_authenticated/profile")({
 function ProfilePage() {
   const { user } = Route.useRouteContext();
   const [name, setName] = useState("");
+  const [handle, setHandleLocal] = useState("");
+  const [savedHandle, setSavedHandle] = useState<string | null>(null);
   const [fp, setFp] = useState<string>("");
   const [pk, setPk] = useState<string>("");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [handleBusy, setHandleBusy] = useState(false);
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushAvail, setPushAvail] = useState(false);
+
+  const fetchInvite = useServerFn(getMyInvite);
+  const callRotate = useServerFn(rotateInvite);
+  const callSetHandle = useServerFn(setHandle);
+
+  useEffect(() => {
+    setPushAvail(pushSupported());
+    (async () => {
+      if (!pushSupported()) return;
+      const status = await getPushStatus();
+      setPushOn(status === "granted" && (await isSubscribed()));
+    })();
+  }, []);
 
   useEffect(() => {
     setPushAvail(pushSupported());
