@@ -313,6 +313,7 @@ function ChatView() {
         </div>
       </header>
 
+      <PushPrompt userId={user.id} />
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-surface px-3 py-4 space-y-2">
         {messages.map((m, i) => {
           const own = m.sender_id === user.id;
