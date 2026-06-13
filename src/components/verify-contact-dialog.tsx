@@ -8,10 +8,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { parseQrPayload, markVerified } from "@/lib/verification";
-import { addVerifiedContact } from "@/lib/contacts.functions";
+import { addVerifiedContact, lookupProfileById } from "@/lib/contacts.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +46,7 @@ export function VerifyContactDialog({
   const [result, setResult] = useState<Result>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
   const addContact = useServerFn(addVerifiedContact);
+  const lookupProfile = useServerFn(lookupProfileById);
 
   function reset() {
     setResult({ kind: "idle" });
@@ -63,13 +63,9 @@ export function VerifyContactDialog({
     }
     let candidate = candidates.find((c) => c.user_id === payload.uid) ?? null;
     if (!candidate) {
-      // Fallback: contact onbekend in deze context — haal profiel op.
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("id, display_name, public_key")
-        .eq("id", payload.uid)
-        .maybeSingle();
-      if (!prof) {
+      // Fallback: contact onbekend in deze context — haal profiel via server op.
+      const prof = await lookupProfile({ data: { user_id: payload.uid } });
+      if (!prof.found) {
         setResult({
           kind: "mismatch",
           reason: "Deze QR hoort niet bij een gebruiker die ik ken.",
@@ -77,7 +73,7 @@ export function VerifyContactDialog({
         return;
       }
       candidate = {
-        user_id: prof.id,
+        user_id: prof.user_id,
         display_name: prof.display_name,
         public_key: prof.public_key,
       };

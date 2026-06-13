@@ -212,3 +212,26 @@ export const addVerifiedContact = createServerFn({ method: "POST" })
     await insertMutualContacts(context.userId, data.contact_user_id);
     return { ok: true, self: false as const };
   });
+
+/** Minimal public profile lookup by user id (for QR verification fallback). */
+export const lookupProfileById = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { user_id: string }) => {
+    if (!UUID_RE.test(data.user_id ?? "")) throw new Error("Ongeldig user id");
+    return data;
+  })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prof } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, public_key")
+      .eq("id", data.user_id)
+      .maybeSingle();
+    if (!prof) return { found: false as const };
+    return {
+      found: true as const,
+      user_id: prof.id,
+      display_name: prof.display_name,
+      public_key: prof.public_key,
+    };
+  });
