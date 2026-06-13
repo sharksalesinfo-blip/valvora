@@ -337,6 +337,16 @@ function ChatView() {
     ? members.map((m) => m.display_name).join(", ")
     : "🔒 End-to-end versleuteld";
 
+  // Voor de header-badge bij direct chats: status van de andere persoon.
+  const directOther = conv?.type === "direct" ? otherMembers[0] : null;
+  const directState = directOther ? verification.get(directOther.user_id) : undefined;
+
+  // Banners: alle leden waarvan de sleutel net is veranderd én die je niet hebt weggeklikt.
+  const changedMembers = otherMembers.filter((m) => {
+    const s = verification.get(m.user_id);
+    return s?.kind === "changed" && !dismissedChanges.has(m.user_id);
+  });
+
   return (
     <div className="h-dvh flex flex-col bg-background">
       <header className="bg-header text-header-foreground px-2 py-2 flex items-center gap-2 sticky top-0 z-10">
@@ -345,12 +355,83 @@ function ChatView() {
           {initials(title)}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">{title}</div>
+          <div className="font-medium truncate flex items-center gap-1.5">
+            <span className="truncate">{title}</span>
+            {directState?.kind === "verified" && (
+              <span title="Geverifieerd op dit toestel">
+                <ShieldCheck className="w-4 h-4 text-green-300 shrink-0" />
+              </span>
+            )}
+          </div>
           <div className="text-xs opacity-80 truncate flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" /> {subtitle}
+            {directState?.kind === "verified" ? (
+              <>
+                <ShieldCheck className="w-3 h-3" /> Geverifieerd · {subtitle}
+              </>
+            ) : (
+              <>
+                <ShieldQuestion className="w-3 h-3" /> Niet geverifieerd · {subtitle}
+              </>
+            )}
           </div>
         </div>
+        {otherMembers.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setVerifyOpen(true)}
+            className="p-2 rounded-full hover:bg-white/10"
+            aria-label="Contact verifiëren"
+            title="Contact verifiëren via QR"
+          >
+            <QrCode className="w-5 h-5" />
+          </button>
+        )}
       </header>
+
+      <VerifyContactDialog
+        open={verifyOpen}
+        onOpenChange={setVerifyOpen}
+        ownerId={user.id}
+        candidates={otherMembers}
+        onVerified={() => {
+          void reconcile();
+        }}
+      />
+
+      {changedMembers.length > 0 && (
+        <div className="bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-b border-amber-300/50 px-3 py-2 text-sm flex flex-col gap-1">
+          {changedMembers.map((m) => (
+            <div key={m.user_id} className="flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                De sleutel van <span className="font-medium">{m.display_name}</span> is gewijzigd.
+                Dit kan onschuldig zijn (nieuw apparaat), maar verifieer opnieuw via QR om zeker te zijn.
+                <button
+                  type="button"
+                  onClick={() => setVerifyOpen(true)}
+                  className="ml-2 underline font-medium"
+                >
+                  Nu verifiëren
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setDismissedChanges((prev) => {
+                    const n = new Set(prev);
+                    n.add(m.user_id);
+                    return n;
+                  })
+                }
+                className="p-1 rounded hover:bg-amber-200/50"
+                aria-label="Sluiten"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <PushPrompt userId={user.id} />
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-surface px-3 py-4 space-y-2">
