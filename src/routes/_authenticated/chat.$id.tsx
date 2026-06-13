@@ -286,6 +286,8 @@ function ChatView() {
     if (error) throw error;
     // bump conversation updated_at
     await supabase.from("conversations").update({ updated_at: created_at }).eq("id", convId);
+    // Stuur neutrale push naar andere leden (fire-and-forget)
+    void notifyConversation(convId);
   }
 
   const title = conv?.type === "group"
