@@ -155,6 +155,34 @@ function ChatView() {
     void reconcile();
   }, [reconcile]);
 
+  // Realtime: detecteer sleutelrotatie van een deelnemer terwijl de chat openstaat.
+  // Bij elke UPDATE op een profiel van een huidig lid werken we members bij; als de
+  // public_key veranderde, hertriggert de bestaande reconcile de amber-banner direct.
+  useEffect(() => {
+    const ids = otherMembers.map((m) => m.user_id);
+    if (ids.length === 0) return;
+    const channel = supabase
+      .channel(`profiles:chat:${convId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.join(",")})` },
+        (payload) => {
+          const row = payload.new as { id: string; display_name: string; public_key: string | null };
+          setMembers((prev) =>
+            prev.map((m) =>
+              m.user_id === row.id
+                ? { ...m, display_name: row.display_name, public_key: row.public_key }
+                : m,
+            ),
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [convId, otherMembers]);
+
 
   // Berichten laden + realtime
   useEffect(() => {
