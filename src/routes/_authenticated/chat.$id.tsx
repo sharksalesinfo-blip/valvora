@@ -13,6 +13,8 @@ import {
   sodiumReady,
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
+import { notifyConversation } from "@/lib/push";
+import { PushPrompt } from "@/components/push-prompt";
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
