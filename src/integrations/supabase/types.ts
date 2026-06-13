@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      contact_verifications: {
+        Row: {
+          contact_user_id: string
+          id: string
+          owner_id: string
+          public_key: string
+          verified_at: string
+        }
+        Insert: {
+          contact_user_id: string
+          id?: string
+          owner_id: string
+          public_key: string
+          verified_at?: string
+        }
+        Update: {
+          contact_user_id?: string
+          id?: string
+          owner_id?: string
+          public_key?: string
+          verified_at?: string
+        }
+        Relationships: []
+      }
       conversation_members: {
         Row: {
           conversation_id: string

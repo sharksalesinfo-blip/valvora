@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Send, Paperclip, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Send, Paperclip, ShieldCheck, ShieldAlert, ShieldQuestion, QrCode, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatTime, initials } from "@/lib/format";
 import { toast } from "sonner";
@@ -15,6 +15,12 @@ import {
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { notifyConversation } from "@/lib/push";
 import { PushPrompt } from "@/components/push-prompt";
+import { VerifyContactDialog } from "@/components/verify-contact-dialog";
+import {
+  loadVerifications,
+  reconcileVerification,
+  type VerificationState,
+} from "@/lib/verification";
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
@@ -74,6 +80,9 @@ function ChatView() {
   const [text, setText] = useState("");
   const [privKey, setPrivKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verification, setVerification] = useState<Map<string, VerificationState>>(new Map());
+  const [dismissedChanges, setDismissedChanges] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +125,36 @@ function ChatView() {
     for (const x of members) m.set(x.user_id, x);
     return m;
   }, [members]);
+
+  const otherMembers = useMemo(
+    () => members.filter((m) => m.user_id !== user.id),
+    [members, user.id],
+  );
+
+  // Reconcile verificaties met huidige publieke sleutels (lokaal, server beslist niets).
+  const reconcile = useCallback(async () => {
+    if (otherMembers.length === 0) return;
+    const cached = await loadVerifications(
+      user.id,
+      otherMembers.map((m) => m.user_id),
+    );
+    const next = new Map<string, VerificationState>();
+    for (const m of otherMembers) {
+      const state = await reconcileVerification(
+        user.id,
+        m.user_id,
+        m.public_key,
+        cached.get(m.user_id),
+      );
+      next.set(m.user_id, state);
+    }
+    setVerification(next);
+  }, [otherMembers, user.id]);
+
+  useEffect(() => {
+    void reconcile();
+  }, [reconcile]);
+
 
   // Berichten laden + realtime
   useEffect(() => {
@@ -298,6 +337,16 @@ function ChatView() {
     ? members.map((m) => m.display_name).join(", ")
     : "🔒 End-to-end versleuteld";
 
+  // Voor de header-badge bij direct chats: status van de andere persoon.
+  const directOther = conv?.type === "direct" ? otherMembers[0] : null;
+  const directState = directOther ? verification.get(directOther.user_id) : undefined;
+
+  // Banners: alle leden waarvan de sleutel net is veranderd én die je niet hebt weggeklikt.
+  const changedMembers = otherMembers.filter((m) => {
+    const s = verification.get(m.user_id);
+    return s?.kind === "changed" && !dismissedChanges.has(m.user_id);
+  });
+
   return (
     <div className="h-dvh flex flex-col bg-background">
       <header className="bg-header text-header-foreground px-2 py-2 flex items-center gap-2 sticky top-0 z-10">
@@ -306,12 +355,83 @@ function ChatView() {
           {initials(title)}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">{title}</div>
+          <div className="font-medium truncate flex items-center gap-1.5">
+            <span className="truncate">{title}</span>
+            {directState?.kind === "verified" && (
+              <span title="Geverifieerd op dit toestel">
+                <ShieldCheck className="w-4 h-4 text-green-300 shrink-0" />
+              </span>
+            )}
+          </div>
           <div className="text-xs opacity-80 truncate flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" /> {subtitle}
+            {directState?.kind === "verified" ? (
+              <>
+                <ShieldCheck className="w-3 h-3" /> Geverifieerd · {subtitle}
+              </>
+            ) : (
+              <>
+                <ShieldQuestion className="w-3 h-3" /> Niet geverifieerd · {subtitle}
+              </>
+            )}
           </div>
         </div>
+        {otherMembers.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setVerifyOpen(true)}
+            className="p-2 rounded-full hover:bg-white/10"
+            aria-label="Contact verifiëren"
+            title="Contact verifiëren via QR"
+          >
+            <QrCode className="w-5 h-5" />
+          </button>
+        )}
       </header>
+
+      <VerifyContactDialog
+        open={verifyOpen}
+        onOpenChange={setVerifyOpen}
+        ownerId={user.id}
+        candidates={otherMembers}
+        onVerified={() => {
+          void reconcile();
+        }}
+      />
+
+      {changedMembers.length > 0 && (
+        <div className="bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-b border-amber-300/50 px-3 py-2 text-sm flex flex-col gap-1">
+          {changedMembers.map((m) => (
+            <div key={m.user_id} className="flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                De sleutel van <span className="font-medium">{m.display_name}</span> is gewijzigd.
+                Dit kan onschuldig zijn (nieuw apparaat), maar verifieer opnieuw via QR om zeker te zijn.
+                <button
+                  type="button"
+                  onClick={() => setVerifyOpen(true)}
+                  className="ml-2 underline font-medium"
+                >
+                  Nu verifiëren
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setDismissedChanges((prev) => {
+                    const n = new Set(prev);
+                    n.add(m.user_id);
+                    return n;
+                  })
+                }
+                className="p-1 rounded hover:bg-amber-200/50"
+                aria-label="Sluiten"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <PushPrompt userId={user.id} />
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-surface px-3 py-4 space-y-2">

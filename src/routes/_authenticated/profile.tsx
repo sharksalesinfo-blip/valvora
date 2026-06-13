@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy, Bell } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { publicKeyFingerprint } from "@/lib/crypto";
+import { KeyQrCode } from "@/components/key-qr-code";
 import {
   getPushStatus,
   isSubscribed,
@@ -87,12 +88,27 @@ function ProfilePage() {
           <Button onClick={save}>Opslaan</Button>
         </section>
 
-        <section className="bg-card border rounded-xl p-4 space-y-2">
+        <section className="bg-card border rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <ShieldCheck className="w-4 h-4 text-primary" /> Sleutel-fingerprint
+            <QrCode className="w-4 h-4 text-primary" /> Jouw verificatie-QR
           </div>
           <p className="text-xs text-muted-foreground">
-            Lees deze code samen voor met je gesprekspartner (telefoon of in persoon) om te bevestigen dat je met de juiste sleutel praat.
+            Laat een gesprekspartner deze code scannen om zijn/haar app te laten
+            bevestigen dat ze met jouw échte sleutel praten. De vergelijking
+            gebeurt alleen op het andere toestel — niets gaat via de server.
+          </p>
+          <div className="flex justify-center">
+            {pk ? <KeyQrCode userId={user.id} publicKey={pk} /> : <div className="text-xs text-muted-foreground">(geen sleutel)</div>}
+          </div>
+        </section>
+
+        <section className="bg-card border rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <ShieldCheck className="w-4 h-4 text-primary" /> Sleutel-fingerprint (fallback)
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Kan iemand niet scannen? Lees deze code samen voor (telefoon of in persoon)
+            om te bevestigen dat je met de juiste sleutel praat.
           </p>
           <div className="font-mono text-sm break-all bg-muted rounded-md p-3">
             {fp || "(geen sleutel)"}
