@@ -31,7 +31,7 @@ export async function generateKeyPair(): Promise<KeyPair> {
 // Korte, leesbare fingerprint van een publieke sleutel — voor out-of-band verificatie.
 export async function publicKeyFingerprint(publicKeyB64: string): Promise<string> {
   await sodiumReady();
-  const hash = sodium.crypto_generichash(16, ub64(publicKeyB64));
+  const hash = sodium.crypto_generichash(16, ub64(publicKeyB64), null);
   // groepeer in blokjes van 4 hex chars
   const hex = sodium.to_hex(hash).toUpperCase();
   return hex.match(/.{4}/g)!.join(" ");
