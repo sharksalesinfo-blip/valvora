@@ -45,6 +45,7 @@ export function VerifyContactDialog({
 }: Props) {
   const [result, setResult] = useState<Result>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
+  const addContact = useServerFn(addVerifiedContact);
 
   function reset() {
     setResult({ kind: "idle" });
@@ -64,7 +65,7 @@ export function VerifyContactDialog({
       setResult({
         kind: "mismatch",
         reason:
-          "Deze QR hoort niet bij iemand in dit gesprek. Open de chat met de juiste persoon.",
+          "Deze QR hoort niet bij iemand uit deze lijst. Open de juiste chat of contacten-pagina.",
       });
       return;
     }
@@ -87,9 +88,18 @@ export function VerifyContactDialog({
     setBusy(true);
     try {
       await markVerified(ownerId, candidate.user_id, candidate.public_key);
+      // En direct ook toevoegen als contact (idempotent). De server bevestigt
+      // de verificatie NIET — die is al lokaal gebeurd.
+      try {
+        await addContact({
+          data: { contact_user_id: candidate.user_id, public_key: candidate.public_key },
+        });
+      } catch (e) {
+        console.warn("addVerifiedContact", e);
+      }
       setResult({ kind: "match", name: candidate.display_name });
       onVerified?.(candidate.user_id);
-      toast.success(`${candidate.display_name} is geverifieerd`);
+      toast.success(`${candidate.display_name} is geverifieerd en toegevoegd`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Opslaan mislukt";
       setResult({ kind: "mismatch", reason: msg });
@@ -97,6 +107,7 @@ export function VerifyContactDialog({
       setBusy(false);
     }
   }
+
 
   return (
     <Dialog
