@@ -78,22 +78,72 @@ function ProfilePage() {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("display_name, public_key, key_fingerprint")
+      .select("display_name, public_key, key_fingerprint, handle")
       .eq("id", user.id)
       .single()
       .then(async ({ data }) => {
         if (data) {
           setName(data.display_name);
+          setHandleLocal(data.handle ?? "");
+          setSavedHandle(data.handle ?? null);
           setPk(data.public_key ?? "");
           setFp(data.key_fingerprint ?? (data.public_key ? await publicKeyFingerprint(data.public_key) : ""));
         }
       });
-  }, [user.id]);
+    void fetchInvite().then((r) => setInviteToken(r.token)).catch(() => undefined);
+  }, [user.id, fetchInvite]);
 
   async function save() {
     const { error } = await supabase.from("profiles").update({ display_name: name }).eq("id", user.id);
     if (error) toast.error(error.message);
     else toast.success("Opgeslagen");
+  }
+
+  async function saveHandle() {
+    setHandleBusy(true);
+    try {
+      const r = await callSetHandle({ data: { handle } });
+      setSavedHandle(r.handle);
+      setHandleLocal(r.handle);
+      toast.success("Handle opgeslagen");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Opslaan mislukt";
+      toast.error(msg);
+    } finally {
+      setHandleBusy(false);
+    }
+  }
+
+  async function rotateInviteLink() {
+    if (!confirm("Maak een nieuwe invite-link aan? De oude werkt daarna niet meer.")) return;
+    setInviteBusy(true);
+    try {
+      const r = await callRotate();
+      setInviteToken(r.token);
+      toast.success("Nieuwe invite-link aangemaakt");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Vernieuwen mislukt";
+      toast.error(msg);
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  const inviteUrl = inviteToken ? buildInviteUrl(inviteToken) : "";
+
+  async function shareInvite() {
+    if (!inviteUrl) return;
+    const text = `Voeg me toe in de versleutelde chat: ${inviteUrl}`;
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      try {
+        await navigator.share({ title: "Uitnodiging", text, url: inviteUrl });
+        return;
+      } catch {
+        // user cancelled — fall through
+      }
+    }
+    await navigator.clipboard.writeText(inviteUrl);
+    toast.success("Link gekopieerd");
   }
 
   return (
@@ -108,6 +158,66 @@ function ProfilePage() {
           <Input value={name} onChange={(e) => setName(e.target.value)} />
           <Button onClick={save}>Opslaan</Button>
         </section>
+
+        <section className="bg-card border rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <AtSign className="w-4 h-4 text-primary" /> Handle
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Een unieke naam waarmee mensen je kunnen vinden, bijvoorbeeld als de
+            invite-link niet bij de hand is. 3–20 tekens: letters, cijfers of _.
+          </p>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
+              <Input
+                value={handle}
+                onChange={(e) => setHandleLocal(e.target.value.replace(/^@/, ""))}
+                placeholder="jouwnaam"
+                className="pl-7"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+            </div>
+            <Button onClick={saveHandle} disabled={handleBusy || !handle || handle === savedHandle}>
+              {handleBusy ? "Bezig…" : "Opslaan"}
+            </Button>
+          </div>
+        </section>
+
+        <section className="bg-card border rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Link2 className="w-4 h-4 text-primary" /> Jouw invite-link
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Iedereen die deze link opent en is ingelogd, wordt direct als contact
+            toegevoegd. Deel hem alleen met mensen die je wilt toelaten.
+          </p>
+          <div className="font-mono text-xs break-all bg-muted rounded-md p-3">
+            {inviteUrl || "(bezig met laden…)"}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={shareInvite} disabled={!inviteUrl} size="sm">
+              <Share2 className="w-4 h-4 mr-1" /> Delen
+            </Button>
+            <Button
+              onClick={() => {
+                if (!inviteUrl) return;
+                void navigator.clipboard.writeText(inviteUrl);
+                toast.success("Gekopieerd");
+              }}
+              disabled={!inviteUrl}
+              size="sm"
+              variant="outline"
+            >
+              <Copy className="w-4 h-4 mr-1" /> Kopiëren
+            </Button>
+            <Button onClick={rotateInviteLink} disabled={inviteBusy} size="sm" variant="outline">
+              <RefreshCw className="w-4 h-4 mr-1" /> Vernieuwen
+            </Button>
+          </div>
+        </section>
+
 
         <section className="bg-card border rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium">
