@@ -45,11 +45,22 @@ function ChatsPage() {
 
     const { data: ms } = await supabase
       .from("conversation_members")
-      .select("conversation_id, user_id, profiles:profiles!conversation_members_user_id_fkey(display_name, avatar_url)")
+      .select("conversation_id, user_id")
       .in("conversation_id", ids);
+    const userIds = Array.from(new Set((ms ?? []).map((m) => m.user_id)));
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .in("id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]);
+    const pmap = new Map((profiles ?? []).map((p) => [p.id, p]));
     const grouped: Record<string, Member[]> = {};
-    for (const m of (ms as any[]) ?? []) {
-      (grouped[m.conversation_id] ||= []).push(m);
+    for (const m of ms ?? []) {
+      const prof = pmap.get(m.user_id);
+      (grouped[m.conversation_id] ||= []).push({
+        conversation_id: m.conversation_id,
+        user_id: m.user_id,
+        profiles: prof ? { display_name: prof.display_name, avatar_url: prof.avatar_url } : null,
+      });
     }
     setMembers(grouped);
 
