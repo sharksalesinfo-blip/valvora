@@ -103,10 +103,13 @@ function ChatsPage() {
 
   return (
     <div className="min-h-dvh flex flex-col bg-background">
-      <header className="bg-header text-header-foreground px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div>
-          <h1 className="text-lg font-semibold">Chats</h1>
-          <p className="text-xs opacity-80 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> End-to-end versleuteld</p>
+      <header className="bg-header text-header-foreground px-4 py-3 flex items-center justify-between sticky top-0 z-10 border-b border-border">
+        <div className="flex items-center gap-2 min-w-0">
+          <img src="/icon-192.png" alt="" className="w-8 h-8 rounded-lg shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold leading-tight tracking-tight">valvora</h1>
+            <p className="text-xs opacity-70 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> End-to-end versleuteld</p>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Link to="/profile" className="p-2 rounded-full hover:bg-white/10">
