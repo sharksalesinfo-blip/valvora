@@ -61,14 +61,26 @@ export function VerifyContactDialog({
       setResult({ kind: "mismatch", reason: "Onbekende QR-code." });
       return;
     }
-    const candidate = candidates.find((c) => c.user_id === payload.uid);
+    let candidate = candidates.find((c) => c.user_id === payload.uid) ?? null;
     if (!candidate) {
-      setResult({
-        kind: "mismatch",
-        reason:
-          "Deze QR hoort niet bij iemand uit deze lijst. Open de juiste chat of contacten-pagina.",
-      });
-      return;
+      // Fallback: contact onbekend in deze context — haal profiel op.
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id, display_name, public_key")
+        .eq("id", payload.uid)
+        .maybeSingle();
+      if (!prof) {
+        setResult({
+          kind: "mismatch",
+          reason: "Deze QR hoort niet bij een gebruiker die ik ken.",
+        });
+        return;
+      }
+      candidate = {
+        user_id: prof.id,
+        display_name: prof.display_name,
+        public_key: prof.public_key,
+      };
     }
     if (!candidate.public_key) {
       setResult({
