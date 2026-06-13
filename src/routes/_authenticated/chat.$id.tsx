@@ -80,6 +80,9 @@ function ChatView() {
   const [text, setText] = useState("");
   const [privKey, setPrivKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verification, setVerification] = useState<Map<string, VerificationState>>(new Map());
+  const [dismissedChanges, setDismissedChanges] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
