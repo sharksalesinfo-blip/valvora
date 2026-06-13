@@ -14,7 +14,7 @@ import {
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { notifyConversation } from "@/lib/push";
-import { PushPrompt } from "@/components/push-prompt";
+import { clearAppBadge } from "@/lib/badge";
 import { VerifyContactDialog } from "@/components/verify-contact-dialog";
 import {
   loadVerifications,
@@ -89,6 +89,7 @@ function ChatView() {
   // Sleutel laden
   useEffect(() => {
     sodiumReady().then(() => loadPrivateKey(user.id)).then(setPrivKey);
+    void clearAppBadge();
   }, [user.id]);
 
   // Conversation + members laden
@@ -461,7 +462,7 @@ function ChatView() {
         </div>
       )}
 
-      <PushPrompt userId={user.id} />
+      
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-surface px-3 py-4 space-y-2">
         {messages.map((m, i) => {
           const own = m.sender_id === user.id;

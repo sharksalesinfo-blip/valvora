@@ -7,6 +7,8 @@ import { sodiumReady } from "@/lib/crypto";
 import { takePendingInvite } from "@/lib/pending-invite";
 import { joinByInvite } from "@/lib/contacts.functions";
 import { toast } from "sonner";
+import { OnboardingPrompt } from "@/components/onboarding-prompt";
+import { installBadgeResetOnForeground } from "@/lib/badge";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -56,6 +58,8 @@ function AuthedLayout() {
     };
   }, [user.id, join, nav]);
 
+  useEffect(() => installBadgeResetOnForeground(), []);
+
   if (!ready) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-sm">
@@ -63,5 +67,10 @@ function AuthedLayout() {
       </div>
     );
   }
-  return <Outlet />;
+  return (
+    <>
+      <OnboardingPrompt userId={user.id} />
+      <Outlet />
+    </>
+  );
 }
