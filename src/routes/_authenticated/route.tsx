@@ -58,6 +58,8 @@ function AuthedLayout() {
     };
   }, [user.id, join, nav]);
 
+  useEffect(() => installBadgeResetOnForeground(), []);
+
   if (!ready) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-sm">
@@ -65,5 +67,10 @@ function AuthedLayout() {
       </div>
     );
   }
-  return <Outlet />;
+  return (
+    <>
+      <OnboardingPrompt userId={user.id} />
+      <Outlet />
+    </>
+  );
 }
