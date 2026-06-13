@@ -14,7 +14,7 @@ import {
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { notifyConversation } from "@/lib/push";
-import { PushPrompt } from "@/components/push-prompt";
+import { clearAppBadge } from "@/lib/badge";
 import { VerifyContactDialog } from "@/components/verify-contact-dialog";
 import {
   loadVerifications,
