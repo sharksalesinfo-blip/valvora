@@ -143,7 +143,7 @@ function ChatView() {
           if (!signed?.signedUrl) throw new Error("Geen signed URL");
           const enc = new Uint8Array(await (await fetch(signed.signedUrl)).arrayBuffer());
           const plainBytes = await decryptFile(enc, meta.nonce, meta.key);
-          const blob = new Blob([plainBytes], { type: meta.mime ?? "image/jpeg" });
+          const blob = new Blob([plainBytes.buffer as ArrayBuffer], { type: meta.mime ?? "image/jpeg" });
           const url = URL.createObjectURL(blob);
           imageBlobUrls.push(url);
           return { id: m.id, sender_id: m.sender_id, created_at: m.created_at, type: "image", imageUrl: url };
@@ -244,7 +244,7 @@ function ChatView() {
       const path = `${convId}/${crypto.randomUUID()}.enc`;
       const { error: upErr } = await supabase.storage
         .from("attachments")
-        .upload(path, new Blob([enc.ciphertext], { type: "application/octet-stream" }), {
+        .upload(path, new Blob([enc.ciphertext.buffer as ArrayBuffer], { type: "application/octet-stream" }), {
           contentType: "application/octet-stream",
         });
       if (upErr) throw upErr;
