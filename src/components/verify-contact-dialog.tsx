@@ -8,8 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { parseQrPayload, markVerified } from "@/lib/verification";
+import { addVerifiedContact } from "@/lib/contacts.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,6 +46,7 @@ export function VerifyContactDialog({
 }: Props) {
   const [result, setResult] = useState<Result>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
+  const addContact = useServerFn(addVerifiedContact);
 
   function reset() {
     setResult({ kind: "idle" });
@@ -57,14 +61,26 @@ export function VerifyContactDialog({
       setResult({ kind: "mismatch", reason: "Onbekende QR-code." });
       return;
     }
-    const candidate = candidates.find((c) => c.user_id === payload.uid);
+    let candidate = candidates.find((c) => c.user_id === payload.uid) ?? null;
     if (!candidate) {
-      setResult({
-        kind: "mismatch",
-        reason:
-          "Deze QR hoort niet bij iemand in dit gesprek. Open de chat met de juiste persoon.",
-      });
-      return;
+      // Fallback: contact onbekend in deze context — haal profiel op.
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id, display_name, public_key")
+        .eq("id", payload.uid)
+        .maybeSingle();
+      if (!prof) {
+        setResult({
+          kind: "mismatch",
+          reason: "Deze QR hoort niet bij een gebruiker die ik ken.",
+        });
+        return;
+      }
+      candidate = {
+        user_id: prof.id,
+        display_name: prof.display_name,
+        public_key: prof.public_key,
+      };
     }
     if (!candidate.public_key) {
       setResult({
@@ -85,9 +101,18 @@ export function VerifyContactDialog({
     setBusy(true);
     try {
       await markVerified(ownerId, candidate.user_id, candidate.public_key);
+      // En direct ook toevoegen als contact (idempotent). De server bevestigt
+      // de verificatie NIET — die is al lokaal gebeurd.
+      try {
+        await addContact({
+          data: { contact_user_id: candidate.user_id, public_key: candidate.public_key },
+        });
+      } catch (e) {
+        console.warn("addVerifiedContact", e);
+      }
       setResult({ kind: "match", name: candidate.display_name });
       onVerified?.(candidate.user_id);
-      toast.success(`${candidate.display_name} is geverifieerd`);
+      toast.success(`${candidate.display_name} is geverifieerd en toegevoegd`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Opslaan mislukt";
       setResult({ kind: "mismatch", reason: msg });
@@ -95,6 +120,7 @@ export function VerifyContactDialog({
       setBusy(false);
     }
   }
+
 
   return (
     <Dialog

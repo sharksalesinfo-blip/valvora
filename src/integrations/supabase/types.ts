@@ -38,6 +38,24 @@ export type Database = {
         }
         Relationships: []
       }
+      contacts: {
+        Row: {
+          contact_user_id: string
+          created_at: string
+          owner_id: string
+        }
+        Insert: {
+          contact_user_id: string
+          created_at?: string
+          owner_id: string
+        }
+        Update: {
+          contact_user_id?: string
+          created_at?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
       conversation_members: {
         Row: {
           conversation_id: string
@@ -140,6 +158,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string
+          handle: string | null
           id: string
           key_fingerprint: string | null
           public_key: string | null
@@ -149,6 +168,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name: string
+          handle?: string | null
           id: string
           key_fingerprint?: string | null
           public_key?: string | null
@@ -158,6 +178,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string
+          handle?: string | null
           id?: string
           key_fingerprint?: string | null
           public_key?: string | null
@@ -185,6 +206,24 @@ export type Database = {
           endpoint?: string
           id?: string
           subscription?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_invites: {
+        Row: {
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          token?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          token?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
