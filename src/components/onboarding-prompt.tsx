@@ -115,7 +115,7 @@ export function OnboardingPrompt({ userId }: { userId: string }) {
       {stage === "install-android" && (
         <Body
           icon={<Download className="w-4 h-4" />}
-          title="Installeer Secure Whisper"
+          title="Installeer valvora"
           text="Voor de beste ervaring (en om meldingen te kunnen ontvangen): zet de app op je startscherm."
           onClose={dismissInstall}
         >
