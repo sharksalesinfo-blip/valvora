@@ -70,7 +70,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", type: "image/svg+xml", href: "/valvora-icon.svg" },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
+      { rel: "icon", type: "image/png", sizes: "512x512", href: "/icon-512.png" },
       { rel: "apple-touch-icon", href: "/icon-192.png" },
+      { rel: "canonical", href: "https://valvora.nl" },
     ],
   }),
   shellComponent: RootShell,
