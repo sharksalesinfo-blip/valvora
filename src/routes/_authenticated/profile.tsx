@@ -1,13 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { publicKeyFingerprint } from "@/lib/crypto";
 import { KeyQrCode } from "@/components/key-qr-code";
+import { getMyInvite, rotateInvite, setHandle } from "@/lib/contacts.functions";
+import { buildInviteUrl } from "@/lib/pending-invite";
 import {
   getPushStatus,
   isSubscribed,
