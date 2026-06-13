@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { parseQrPayload, markVerified } from "@/lib/verification";
+import { addVerifiedContact } from "@/lib/contacts.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
