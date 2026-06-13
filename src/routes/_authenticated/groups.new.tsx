@@ -24,12 +24,23 @@ function NewGroup() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("profiles")
-      .select("id, display_name, public_key")
-      .neq("id", user.id)
-      .order("display_name")
-      .then(({ data }) => setPeople((data as Profile[]) ?? []));
+    (async () => {
+      const { data: rows } = await supabase
+        .from("contacts")
+        .select("contact_user_id")
+        .eq("owner_id", user.id);
+      const ids = (rows ?? []).map((r) => r.contact_user_id);
+      if (ids.length === 0) {
+        setPeople([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, display_name, public_key")
+        .in("id", ids)
+        .order("display_name");
+      setPeople((data as Profile[]) ?? []);
+    })();
   }, [user.id]);
 
   function toggle(id: string) {
