@@ -130,20 +130,6 @@ export async function encryptRecoveryPayload(
   };
 }
 
-/** Re-encrypt a fresh payload with an already-derived key (for refresh-token rotation). */
-export async function reencryptRecoveryPayload(
-  derivedKey: Uint8Array,
-  payload: RecoveryPayload,
-): Promise<{ ciphertext: string; nonce: string }> {
-  await sodiumReady();
-  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-  const cipher = sodium.crypto_secretbox_easy(
-    sodium.from_string(JSON.stringify(payload)),
-    nonce,
-    derivedKey,
-  );
-  return { ciphertext: b64(cipher), nonce: b64(nonce) };
-}
 
 export async function decryptRecoveryBlob(
   code: string,
