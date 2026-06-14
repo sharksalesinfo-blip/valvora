@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatTime } from "@/lib/format";
-import { Plus, Users, ShieldCheck, User as UserIcon } from "lucide-react";
+import { Plus, Users, ShieldCheck } from "lucide-react";
 import { AvatarCircle } from "@/components/avatar-circle";
 
 export const Route = createFileRoute("/_authenticated/chats")({
