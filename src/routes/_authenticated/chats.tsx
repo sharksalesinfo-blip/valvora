@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatTime } from "@/lib/format";
-import { Plus, Users, ShieldCheck, User as UserIcon } from "lucide-react";
+import { Plus, Users, ShieldCheck } from "lucide-react";
 import { AvatarCircle } from "@/components/avatar-circle";
 
 export const Route = createFileRoute("/_authenticated/chats")({
@@ -28,6 +28,7 @@ function ChatsPage() {
   const [convs, setConvs] = useState<ConvRow[]>([]);
   const [members, setMembers] = useState<Record<string, Member[]>>({});
   const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string }>>({});
+  const [me, setMe] = useState<{ display_name: string; avatar_url: string | null } | null>(null);
 
   async function load() {
     const { data: myMem } = await supabase
@@ -81,6 +82,14 @@ function ChatsPage() {
 
   useEffect(() => {
     void load();
+    void supabase
+      .from("profiles")
+      .select("display_name, avatar_url")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setMe({ display_name: data.display_name, avatar_url: data.avatar_url });
+      });
     const ch = supabase
       .channel("chats-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => load())
@@ -109,8 +118,8 @@ function ChatsPage() {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Link to="/profile" className="p-2 rounded-full hover:bg-white/10" aria-label="Profiel">
-            <UserIcon className="w-5 h-5" />
+          <Link to="/profile" className="p-1 rounded-full hover:bg-white/10" aria-label="Profiel">
+            <AvatarCircle name={me?.display_name ?? "?"} avatarUrl={me?.avatar_url ?? null} size={36} />
           </Link>
         </div>
       </header>
