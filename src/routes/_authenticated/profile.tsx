@@ -32,6 +32,8 @@ import {
   subscribePush,
   unsubscribePush,
 } from "@/lib/push";
+import { RecoverySection } from "@/components/recovery-section";
+import { getMyRecoveryStatus } from "@/lib/recovery.functions";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
@@ -72,6 +74,8 @@ function ProfilePage() {
   const [pushAvail, setPushAvail] = useState(false);
   const [pushNote, setPushNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [recoveryEnabled, setRecoveryEnabled] = useState<boolean | null>(null);
+  const fetchRecovery = useServerFn(getMyRecoveryStatus);
 
   const fetchInvite = useServerFn(getMyInvite);
   const callRotate = useServerFn(rotateInvite);
@@ -126,7 +130,8 @@ function ProfilePage() {
         }
       });
     void fetchInvite().then((r) => setInviteToken(r.token)).catch(() => undefined);
-  }, [user.id, fetchInvite]);
+    void fetchRecovery().then((s) => setRecoveryEnabled(s.enabled)).catch(() => setRecoveryEnabled(false));
+  }, [user.id, fetchInvite, fetchRecovery]);
 
   async function save() {
     const { error } = await supabase.from("profiles").update({ display_name: name }).eq("id", user.id);
@@ -390,6 +395,8 @@ function ProfilePage() {
           )}
         </section>
 
+        <RecoverySection userId={user.id} />
+
         <section className="bg-card border rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -430,6 +437,13 @@ function ProfilePage() {
                 <AlertDialogDescription>
                   Je privésleutel blijft op dit apparaat bewaard, dus je kunt later
                   weer inloggen en je berichten lezen.
+                  {recoveryEnabled === false && (
+                    <span className="block mt-2 text-amber-600 dark:text-amber-400">
+                      ⚠️ Je hebt geen herstelcode aangemaakt. Als je je
+                      browsergegevens wist of dit apparaat verliest, ben je je
+                      account kwijt.
+                    </span>
+                  )}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

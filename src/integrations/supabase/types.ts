@@ -109,6 +109,42 @@ export type Database = {
         }
         Relationships: []
       }
+      key_recovery: {
+        Row: {
+          ciphertext: string
+          created_at: string
+          kdf_memlimit: number
+          kdf_opslimit: number
+          kdf_salt: string
+          nonce: string
+          owner_id: string
+          recovery_id: string
+          updated_at: string
+        }
+        Insert: {
+          ciphertext: string
+          created_at?: string
+          kdf_memlimit: number
+          kdf_opslimit: number
+          kdf_salt: string
+          nonce: string
+          owner_id: string
+          recovery_id: string
+          updated_at?: string
+        }
+        Update: {
+          ciphertext?: string
+          created_at?: string
+          kdf_memlimit?: number
+          kdf_opslimit?: number
+          kdf_salt?: string
+          nonce?: string
+          owner_id?: string
+          recovery_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           attachment_path: string | null
