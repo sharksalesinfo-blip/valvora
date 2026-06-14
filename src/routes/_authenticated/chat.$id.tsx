@@ -18,7 +18,10 @@ import {
   Image as ImageIcon,
   File as FileIcon,
   CornerDownRight,
+  Check,
+  CheckCheck,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/format";
 import { AvatarCircle } from "@/components/avatar-circle";
