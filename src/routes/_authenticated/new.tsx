@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Users, Share2, Copy, Search, UserPlus, AtSign } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { initials } from "@/lib/format";
+import { AvatarCircle } from "@/components/avatar-circle";
 import { toast } from "sonner";
 import { addByHandle, getMyInvite } from "@/lib/contacts.functions";
 import { createDirectConversation } from "@/lib/conversations.functions";
@@ -193,9 +193,7 @@ function NewChat() {
         {filtered.map((p) => (
           <li key={p.id}>
             <button onClick={() => startDirect(p)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 text-left">
-              <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center font-semibold">
-                {initials(p.display_name)}
-              </div>
+              <AvatarCircle name={p.display_name} avatarUrl={p.avatar_url} size={48} />
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{p.display_name}</div>
                 <div className="text-xs text-muted-foreground truncate">
