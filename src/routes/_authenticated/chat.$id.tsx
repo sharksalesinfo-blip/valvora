@@ -31,6 +31,7 @@ import {
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { clearAppBadge } from "@/lib/badge";
+import { setLastRead } from "@/lib/unread";
 import { VerifyContactDialog } from "@/components/verify-contact-dialog";
 import {
   loadVerifications,
@@ -147,7 +148,19 @@ function ChatView() {
   useEffect(() => {
     sodiumReady().then(() => loadPrivateKey(user.id)).then(setPrivKey);
     void clearAppBadge();
-  }, [user.id]);
+    setLastRead(convId);
+  }, [user.id, convId]);
+
+  // Markeer als gelezen wanneer er nieuwe berichten binnenkomen terwijl deze chat open is.
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") setLastRead(convId);
+    };
+    setLastRead(convId);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [convId, messages.length]);
 
   // Conversation + members laden
   useEffect(() => {

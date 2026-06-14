@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatTime } from "@/lib/format";
 import { Plus, Users, ShieldCheck } from "lucide-react";
 import { AvatarCircle } from "@/components/avatar-circle";
+import { isUnread } from "@/lib/unread";
 
 
 export const Route = createFileRoute("/_authenticated/chats")({
@@ -28,8 +29,9 @@ function ChatsPage() {
   
   const [convs, setConvs] = useState<ConvRow[]>([]);
   const [members, setMembers] = useState<Record<string, Member[]>>({});
-  const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string }>>({});
+  const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string; sender_id: string }>>({});
   const [me, setMe] = useState<{ display_name: string; avatar_url: string | null } | null>(null);
+  const [unreadTick, setUnreadTick] = useState(0);
 
   async function load() {
     const { data: myMem } = await supabase
@@ -71,12 +73,12 @@ function ChatsPage() {
 
     const { data: last } = await supabase
       .from("messages")
-      .select("conversation_id, created_at")
+      .select("conversation_id, created_at, sender_id")
       .in("conversation_id", ids)
       .order("created_at", { ascending: false });
-    const lm: Record<string, { created_at: string }> = {};
+    const lm: Record<string, { created_at: string; sender_id: string }> = {};
     for (const r of last ?? []) {
-      if (!lm[r.conversation_id]) lm[r.conversation_id] = { created_at: r.created_at };
+      if (!lm[r.conversation_id]) lm[r.conversation_id] = { created_at: r.created_at, sender_id: r.sender_id };
     }
     setLastMsg(lm);
   }
@@ -96,8 +98,13 @@ function ChatsPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_members" }, () => load())
       .subscribe();
+    const onUnread = () => setUnreadTick((n) => n + 1);
+    window.addEventListener("unread-changed", onUnread);
+    window.addEventListener("focus", onUnread);
     return () => {
       supabase.removeChannel(ch);
+      window.removeEventListener("unread-changed", onUnread);
+      window.removeEventListener("focus", onUnread);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
@@ -136,6 +143,8 @@ function ChatsPage() {
             {convs.map((c) => {
               const d = displayFor(c);
               const last = lastMsg[c.id];
+              const unread = isUnread(c.id, last?.created_at, last?.sender_id, user.id);
+              void unreadTick;
               return (
                 <li key={c.id}>
                   <Link
@@ -151,13 +160,27 @@ function ChatsPage() {
                       <AvatarCircle name={d.name} avatarUrl={d.avatar} size={48} />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline">
-                        <span className="font-medium truncate">{d.name}</span>
-                        {last && <span className="text-xs text-muted-foreground shrink-0 ml-2">{formatTime(last.created_at)}</span>}
+                      <div className="flex justify-between items-baseline gap-2">
+                        <span className={`truncate ${unread ? "font-semibold" : "font-medium"}`}>{d.name}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {last && (
+                            <span className={`text-xs ${unread ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                              {formatTime(last.created_at)}
+                            </span>
+                          )}
+                          {unread && (
+                            <span
+                              aria-label="Nieuw bericht"
+                              className="w-2.5 h-2.5 rounded-full bg-primary shrink-0"
+                            />
+                          )}
+                        </div>
                       </div>
-                      {!last && (
+                      {!last ? (
                         <p className="text-sm text-muted-foreground truncate">Nog geen berichten</p>
-                      )}
+                      ) : unread ? (
+                        <p className="text-sm text-primary truncate">Nieuw bericht</p>
+                      ) : null}
                     </div>
                   </Link>
                 </li>
