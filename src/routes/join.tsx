@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { joinByInvite, lookupInvite } from "@/lib/contacts.functions";
 import { rememberPendingInvite } from "@/lib/pending-invite";
 import { Button } from "@/components/ui/button";
-import { Lock, UserPlus, ShieldCheck, AlertCircle } from "lucide-react";
+import { Lock, UserPlus, ShieldCheck, AlertCircle, Loader2 } from "lucide-react";
 
 const searchSchema = z.object({
   code: fallback(z.string(), "").default(""),
@@ -20,12 +20,10 @@ export const Route = createFileRoute("/join")({
 });
 
 type State =
-  | { kind: "loading" }
+  | { kind: "loading"; label: string }
   | { kind: "missing" }
-  | { kind: "preview"; name: string; userId: string; handle: string | null }
   | { kind: "added"; name: string; userId: string }
   | { kind: "self" }
-  | { kind: "needs_auth" }
   | { kind: "error"; message: string };
 
 function JoinPage() {
@@ -33,7 +31,7 @@ function JoinPage() {
   const nav = useNavigate();
   const join = useServerFn(joinByInvite);
   const lookup = useServerFn(lookupInvite);
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [state, setState] = useState<State>({ kind: "loading", label: "Even kijken…" });
 
   useEffect(() => {
     let cancelled = false;
@@ -42,14 +40,27 @@ function JoinPage() {
         setState({ kind: "missing" });
         return;
       }
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        rememberPendingInvite(code);
-        if (!cancelled) setState({ kind: "needs_auth" });
-        return;
+      rememberPendingInvite(code);
+
+      // Sign in anonymously if there's no session yet. New users don't need
+      // anything beyond the invite link.
+      let { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) {
+        if (!cancelled) setState({ kind: "loading", label: "Account aanmaken…" });
+        const { error } = await supabase.auth.signInAnonymously();
+        if (error) {
+          if (!cancelled) setState({ kind: "error", message: "Aanmelden lukte niet. Probeer het opnieuw." });
+          return;
+        }
+        ({ data: sess } = await supabase.auth.getSession());
+        if (!sess.session) {
+          if (!cancelled) setState({ kind: "error", message: "Aanmelden lukte niet. Probeer het opnieuw." });
+          return;
+        }
       }
+
       try {
-        // Preview first so we can show "x is toegevoegd"
+        if (!cancelled) setState({ kind: "loading", label: "Contact koppelen…" });
         const info = await lookup({ data: { token: code } });
         if (!info.found) {
           if (!cancelled) setState({ kind: "error", message: "Deze invite-link werkt niet meer." });
@@ -60,6 +71,8 @@ function JoinPage() {
         if (result.self) {
           setState({ kind: "self" });
         } else {
+          // Forward to the app — onboarding (name + recovery prompt) lives there.
+          nav({ to: "/chats" });
           setState({ kind: "added", name: info.display_name, userId: info.user_id });
         }
       } catch (e: unknown) {
@@ -70,7 +83,7 @@ function JoinPage() {
     return () => {
       cancelled = true;
     };
-  }, [code, join, lookup]);
+  }, [code, join, lookup, nav]);
 
   return (
     <div className="min-h-dvh bg-background flex items-center justify-center px-4">
@@ -83,28 +96,15 @@ function JoinPage() {
         </div>
 
         {state.kind === "loading" && (
-          <p className="text-sm text-muted-foreground text-center">Bezig met toevoegen…</p>
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-4">
+            <Loader2 className="w-4 h-4 animate-spin" /> {state.label}
+          </div>
         )}
 
         {state.kind === "missing" && (
           <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-sm">
             <AlertCircle className="w-4 h-4 mt-0.5" />
             <div>Er staat geen uitnodigingscode in de link.</div>
-          </div>
-        )}
-
-        {state.kind === "needs_auth" && (
-          <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-md bg-muted p-3 text-sm">
-              <Lock className="w-4 h-4 mt-0.5" />
-              <div>
-                Log in of maak een account aan. Daarna word je automatisch
-                toegevoegd als contact.
-              </div>
-            </div>
-            <Button className="w-full" onClick={() => nav({ to: "/auth" })}>
-              Doorgaan
-            </Button>
           </div>
         )}
 
@@ -137,11 +137,11 @@ function JoinPage() {
         {state.kind === "error" && (
           <div className="space-y-3">
             <div className="flex items-start gap-2 rounded-md bg-destructive/10 text-destructive p-3 text-sm">
-              <AlertCircle className="w-5 h-5 mt-0.5" />
+              <Lock className="w-5 h-5 mt-0.5" />
               <div>{state.message}</div>
             </div>
-            <Link to="/chats" className="block text-center text-sm text-muted-foreground hover:text-foreground">
-              Terug naar de app
+            <Link to="/auth" className="block text-center text-sm text-muted-foreground hover:text-foreground">
+              Terug
             </Link>
           </div>
         )}
