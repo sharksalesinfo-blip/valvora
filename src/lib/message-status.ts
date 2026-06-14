@@ -43,11 +43,13 @@ export function aggregateStatus(opts: {
   rowsForGroup: StatusRow[];
   otherMemberCount: number;
   showRead: boolean; // false = leesbevestigingen lokaal uit (wederkerig)
+  selfUserId?: string; // sluit de afzender uit van de telling
 }): "sent" | "delivered" | "read" {
   if (opts.otherMemberCount <= 0) return "sent";
   const delivered = new Set<string>();
   const read = new Set<string>();
   for (const r of opts.rowsForGroup) {
+    if (opts.selfUserId && r.user_id === opts.selfUserId) continue;
     if (r.status === "delivered") delivered.add(r.user_id);
     if (r.status === "read") {
       read.add(r.user_id);
