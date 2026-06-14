@@ -116,6 +116,22 @@ function ProfilePage() {
     }
   }
 
+  async function toggleReadReceipts(on: boolean) {
+    setReadReceiptsBusy(true);
+    const prev = readReceiptsEnabled;
+    setReadReceiptsEnabled(on);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ read_receipts_enabled: on })
+      .eq("id", user.id);
+    setReadReceiptsBusy(false);
+    if (error) {
+      setReadReceiptsEnabled(prev);
+      toast.error(error.message);
+    }
+  }
+
+
   useEffect(() => {
     supabase
       .from("profiles")
