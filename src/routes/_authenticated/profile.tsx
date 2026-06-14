@@ -119,7 +119,8 @@ function ProfilePage() {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("display_name, public_key, key_fingerprint, handle, avatar_url")
+      .select("display_name, public_key, key_fingerprint, handle, avatar_url, read_receipts_enabled")
+
       .eq("id", user.id)
       .single()
       .then(async ({ data }) => {
