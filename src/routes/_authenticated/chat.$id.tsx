@@ -337,6 +337,7 @@ function ChatView() {
       } catch {
         return {
           id: m.id,
+          group_id: m.group_id,
           sender_id: m.sender_id,
           created_at: m.created_at,
           type: m.type,
@@ -344,6 +345,7 @@ function ChatView() {
           failed: true,
           replyToId: m.reply_to_message_id,
         };
+
       }
     }
 
