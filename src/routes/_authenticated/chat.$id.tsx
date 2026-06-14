@@ -464,6 +464,78 @@ function ChatView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
+  // Aflever-/leesstatussen laden + realtime updates voor dit gesprek.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("message_status")
+        .select("group_id, user_id, status, at")
+        .eq("conversation_id", convId);
+      if (cancelled || !data) return;
+      const map = new Map<string, StatusRow[]>();
+      for (const r of data as StatusRow[]) {
+        const arr = map.get(r.group_id) ?? [];
+        arr.push(r);
+        map.set(r.group_id, arr);
+      }
+      setStatuses(map);
+    })();
+
+    const ch = supabase
+      .channel(`status:${convId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_status",
+          filter: `conversation_id=eq.${convId}`,
+        },
+        (payload) => {
+          const r = payload.new as StatusRow & { conversation_id: string };
+          setStatuses((prev) => {
+            const arr = prev.get(r.group_id) ?? [];
+            if (arr.some((x) => x.user_id === r.user_id && x.status === r.status)) return prev;
+            const next = new Map(prev);
+            next.set(r.group_id, [...arr, { group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at }]);
+            return next;
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(ch);
+    };
+  }, [convId]);
+
+  // Wanneer het venster zichtbaar wordt (of leesbevestigingen aangaan), 'read'
+  // schrijven voor binnenkomende berichten die nog niet als gelezen gemarkeerd zijn.
+  useEffect(() => {
+    if (!readReceiptsEnabled) return;
+    const markVisibleAsRead = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      for (const m of messages) {
+        if (m.sender_id === user.id) continue;
+        const rows = statuses.get(m.group_id) ?? [];
+        if (rows.some((r) => r.user_id === user.id && r.status === "read")) continue;
+        void writeStatus({
+          groupId: m.group_id,
+          conversationId: convId,
+          userId: user.id,
+          status: "read",
+        });
+      }
+    };
+    markVisibleAsRead();
+    document.addEventListener("visibilitychange", markVisibleAsRead);
+    return () => document.removeEventListener("visibilitychange", markVisibleAsRead);
+  }, [messages, statuses, readReceiptsEnabled, convId, user.id]);
+
+
+
   async function sendText() {
     const body = text.trim();
     if (!body || !privKey) return;
