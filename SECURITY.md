@@ -60,7 +60,7 @@ Wat een forker moet inrichten — de niet-vanzelfsprekende dingen eerst, want di
 - **Anonymous sign-ins moeten AAN staan** in het Supabase-project. Anders mislukt elke aanmelding direct, zonder duidelijke foutmelding voor de eindgebruiker.
 - **`VAPID_SUBJECT` moet een geldige URL zijn** — `mailto:adres@domein.tld` of `https://domein.tld`. Een kaal e-mailadres laat de `notify` edge function bij boot crashen (`web-push` valideert dit strikt) en er komt dan geen enkele push aan. Default fallback in de code is `mailto:admin@example.com`; zet dit expliciet op iets correct.
 - **VAPID-sleutelpaar als secrets**: `VAPID_PUBLIC_KEY` en `VAPID_PRIVATE_KEY`. De public key komt ook in de client (via `src/lib/vapid.functions.ts`). De private key blijft serverside.
-- **Edge functions** die uitgerold moeten zijn: `notify` (in `supabase/functions/notify/`). De `notify-test` functie is een tijdelijke debug-tool en hoort niet in productie.
+- **Edge functions** die uitgerold moeten zijn: `notify` (in `supabase/functions/notify/`). Dit is bewust het enige pad dat pushes kan versturen, en alleen na server-side membership-check op `conversation_members` — er is geen ongeautoriseerd "all-subscriptions"-endpoint.
 - **Storage buckets** (beide privé): `attachments` (versleutelde bestanden) en `avatars`.
 - **Database**: alle migraties in `supabase/migrations/` toepassen. Dat zet onder andere op: `profiles`, `contacts`, `contact_verifications`, `conversations`, `conversation_members`, `messages`, `push_subscriptions`, `key_recovery`, `user_invites`, plus RLS-policies en de `private.shares_conversation_with()` helper waar het avatar-policy op leunt.
 - **Auth providers**: alleen anonymous sign-in is nodig. Geen e-mail, geen OAuth.
