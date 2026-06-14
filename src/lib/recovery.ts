@@ -12,17 +12,8 @@
 import sodium from "libsodium-wrappers";
 import { sodiumReady } from "./crypto";
 
-const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 31 chars… pad to 32
-// We need exactly 32 chars for base32. Add one safe char.
-const A32 = ALPHABET + "9"; // duplicate '9' is fine — we generate, never parse arbitrary
-// Better: use a true 32-char alphabet without ambiguous chars:
-const B32 = "ABCDEFGHJKMNPQRSTUVWXYZ23456789#"; // '#' as filler — not used; we'll filter
-void A32; void B32;
-
-// Use a clean 32-char alphabet: RFC4648 base32 without 0/1/8 ambiguity is awkward;
-// pragmatically use Crockford base32:
-const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // 32 chars, excludes I L O U
-const ALPH = CROCKFORD;
+// Crockford-style base32 (32 chars, excludes I L O U for readability).
+const ALPH = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 function bytesToBase32(bytes: Uint8Array): string {
   let bits = 0;
