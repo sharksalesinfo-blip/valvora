@@ -82,6 +82,14 @@ function ChatsPage() {
 
   useEffect(() => {
     void load();
+    void supabase
+      .from("profiles")
+      .select("display_name, avatar_url")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setMe({ display_name: data.display_name, avatar_url: data.avatar_url });
+      });
     const ch = supabase
       .channel("chats-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => load())
