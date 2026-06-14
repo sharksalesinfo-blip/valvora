@@ -66,24 +66,6 @@ export const saveMyRecovery = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Update only the ciphertext+nonce on rotation (recovery_id and KDF params stay). */
-export const rotateMyRecoveryCiphertext = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: { ciphertext: string; nonce: string }) => {
-    if (!data || typeof data.ciphertext !== "string" || typeof data.nonce !== "string")
-      throw new Error("Ongeldige invoer");
-    if (data.ciphertext.length < 16 || data.ciphertext.length > 8192) throw new Error("Ciphertext-lengte ongeldig");
-    if (data.nonce.length < 8 || data.nonce.length > 128) throw new Error("Nonce-lengte ongeldig");
-    return { ciphertext: data.ciphertext, nonce: data.nonce };
-  })
-  .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("key_recovery")
-      .update({ ciphertext: data.ciphertext, nonce: data.nonce, updated_at: new Date().toISOString() })
-      .eq("owner_id", context.userId);
-    if (error) throw error;
-    return { ok: true };
-  });
 
 export const disableMyRecovery = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

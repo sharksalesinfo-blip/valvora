@@ -130,20 +130,6 @@ export async function encryptRecoveryPayload(
   };
 }
 
-/** Re-encrypt a fresh payload with an already-derived key (for refresh-token rotation). */
-export async function reencryptRecoveryPayload(
-  derivedKey: Uint8Array,
-  payload: RecoveryPayload,
-): Promise<{ ciphertext: string; nonce: string }> {
-  await sodiumReady();
-  const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
-  const cipher = sodium.crypto_secretbox_easy(
-    sodium.from_string(JSON.stringify(payload)),
-    nonce,
-    derivedKey,
-  );
-  return { ciphertext: b64(cipher), nonce: b64(nonce) };
-}
 
 export async function decryptRecoveryBlob(
   code: string,
@@ -159,40 +145,3 @@ export async function decryptRecoveryBlob(
   return obj;
 }
 
-/** Persist derived key on the original device so we can re-encrypt on token rotation. */
-const DB = "e2ee";
-const STORE = "keys";
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const db = await openDb();
-  return new Promise<T>((resolve, reject) => {
-    const t = db.transaction(STORE, mode);
-    const r = fn(t.objectStore(STORE));
-    r.onsuccess = () => resolve(r.result as T);
-    r.onerror = () => reject(r.error);
-  });
-}
-
-export async function cacheRecoveryWrapKey(userId: string, recoveryId: string, key: Uint8Array): Promise<void> {
-  await tx("readwrite", (s) => s.put({ recoveryId, key: b64(key) }, `recovery:${userId}`));
-}
-
-export async function loadRecoveryWrapKey(userId: string): Promise<{ recoveryId: string; key: Uint8Array } | null> {
-  const v = await tx<{ recoveryId: string; key: string } | undefined>("readonly", (s) => s.get(`recovery:${userId}`));
-  if (!v) return null;
-  await sodiumReady();
-  return { recoveryId: v.recoveryId, key: ub64(v.key) };
-}
-
-export async function clearRecoveryWrapKey(userId: string): Promise<void> {
-  await tx("readwrite", (s) => s.delete(`recovery:${userId}`));
-}

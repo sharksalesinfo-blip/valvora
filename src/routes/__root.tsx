@@ -106,12 +106,9 @@ function RootComponent() {
 
   useEffect(() => {
     void registerPushWorker();
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
-      }
-      if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && session) {
-        void rotateRecoveryIfPossible(session);
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -125,24 +122,3 @@ function RootComponent() {
   );
 }
 
-async function rotateRecoveryIfPossible(session: { user: { id: string }; access_token: string; refresh_token: string }) {
-  try {
-    const { loadRecoveryWrapKey, reencryptRecoveryPayload } = await import("@/lib/recovery");
-    const cached = await loadRecoveryWrapKey(session.user.id);
-    if (!cached) return;
-    const { loadPrivateKey } = await import("@/lib/local-key-store");
-    const priv = await loadPrivateKey(session.user.id);
-    if (!priv) return;
-    const { ciphertext, nonce } = await reencryptRecoveryPayload(cached.key, {
-      v: 1,
-      user_id: session.user.id,
-      private_key: priv,
-      refresh_token: session.refresh_token,
-      access_token: session.access_token,
-    });
-    const { rotateMyRecoveryCiphertext } = await import("@/lib/recovery.functions");
-    await rotateMyRecoveryCiphertext({ data: { ciphertext, nonce } });
-  } catch (e) {
-    console.warn("recovery rotation skipped", e);
-  }
-}

@@ -18,9 +18,8 @@ import {
   generateRecoveryCode,
   formatRecoveryCode,
   encryptRecoveryPayload,
-  cacheRecoveryWrapKey,
-  clearRecoveryWrapKey,
 } from "@/lib/recovery";
+
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -62,7 +61,7 @@ export function RecoverySection({ userId }: { userId: string }) {
       const { data } = await supabase.auth.getSession();
       if (!data.session) throw new Error("Geen actieve sessie");
       const code = await generateRecoveryCode();
-      const { blob, derivedKey } = await encryptRecoveryPayload(code, {
+      const { blob } = await encryptRecoveryPayload(code, {
         v: 1,
         user_id: userId,
         private_key: priv,
@@ -70,7 +69,7 @@ export function RecoverySection({ userId }: { userId: string }) {
         access_token: data.session.access_token,
       });
       await save({ data: blob });
-      await cacheRecoveryWrapKey(userId, blob.recovery_id, derivedKey);
+
       setShownCode(formatRecoveryCode(code));
       setAcknowledged(false);
       setEnabled(true);
@@ -86,9 +85,9 @@ export function RecoverySection({ userId }: { userId: string }) {
     setBusy(true);
     try {
       await disable();
-      await clearRecoveryWrapKey(userId);
       setEnabled(false);
       setUpdatedAt(null);
+
       toast.success("Herstelcode uitgeschakeld");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Uitschakelen mislukt");
@@ -161,10 +160,16 @@ export function RecoverySection({ userId }: { userId: string }) {
             op een nieuw apparaat opnieuw inloggen met dezelfde identiteit.
             <br /><br />
             <em className="not-italic text-muted-foreground/80">
-              Let op: de code herstelt je identiteit en je contacten — niet je
-              oude berichten als die alleen op het verloren apparaat stonden.
+              Belangrijk: de code is tijdsgebonden. Hij werkt zolang je
+              opgeslagen sessie op de server nog geldig is (meestal enkele
+              weken zonder gebruik). Open de app af en toe op een vertrouwd
+              apparaat en maak na langere afwezigheid een nieuwe code aan om
+              dit venster te verlengen. Herstel zet je identiteit en contacten
+              terug — niet oude berichten die alleen op een verloren apparaat
+              stonden.
             </em>
           </p>
+
 
           {enabled === true && (
             <div className="rounded-md bg-primary/10 text-primary text-sm p-3 flex items-start gap-2">
