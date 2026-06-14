@@ -1,10 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatTime, initials } from "@/lib/format";
-import { LogOut, Plus, Users, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { formatTime } from "@/lib/format";
+import { Plus, Users, ShieldCheck, User as UserIcon } from "lucide-react";
+import { AvatarCircle } from "@/components/avatar-circle";
 
 export const Route = createFileRoute("/_authenticated/chats")({
   component: ChatsPage,
@@ -17,11 +16,15 @@ type ConvRow = {
   updated_at: string;
 };
 
-type Member = { conversation_id: string; user_id: string; profiles?: { display_name: string; avatar_url: string | null } | null };
+type Member = {
+  conversation_id: string;
+  user_id: string;
+  profiles?: { display_name: string; avatar_url: string | null } | null;
+};
 
 function ChatsPage() {
   const { user } = Route.useRouteContext();
-  const nav = useNavigate();
+  
   const [convs, setConvs] = useState<ConvRow[]>([]);
   const [members, setMembers] = useState<Record<string, Member[]>>({});
   const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string }>>({});
@@ -89,12 +92,6 @@ function ChatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
-  async function logout() {
-    await supabase.auth.signOut();
-    toast.success("Uitgelogd");
-    nav({ to: "/auth" });
-  }
-
   function displayFor(c: ConvRow): { name: string; avatar: string | null } {
     if (c.type === "group") return { name: c.name ?? "Groep", avatar: null };
     const other = members[c.id]?.find((m) => m.user_id !== user.id);
@@ -112,12 +109,9 @@ function ChatsPage() {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Link to="/profile" className="p-2 rounded-full hover:bg-white/10">
-            <Users className="w-5 h-5" />
+          <Link to="/profile" className="p-2 rounded-full hover:bg-white/10" aria-label="Profiel">
+            <UserIcon className="w-5 h-5" />
           </Link>
-          <button onClick={logout} className="p-2 rounded-full hover:bg-white/10" aria-label="Uitloggen">
-            <LogOut className="w-5 h-5" />
-          </button>
         </div>
       </header>
 
@@ -139,17 +133,21 @@ function ChatsPage() {
                     params={{ id: c.id }}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 active:bg-muted transition-colors"
                   >
-                    <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center font-semibold shrink-0">
-                      {c.type === "group" ? <Users className="w-5 h-5" /> : initials(d.name)}
-                    </div>
+                    {c.type === "group" ? (
+                      <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center font-semibold shrink-0">
+                        <Users className="w-5 h-5" />
+                      </div>
+                    ) : (
+                      <AvatarCircle name={d.name} avatarUrl={d.avatar} size={48} />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline">
                         <span className="font-medium truncate">{d.name}</span>
                         {last && <span className="text-xs text-muted-foreground shrink-0 ml-2">{formatTime(last.created_at)}</span>}
                       </div>
-                      <p className="text-sm text-muted-foreground truncate italic">
-                        {last ? "🔒 Versleuteld bericht" : "Nog geen berichten"}
-                      </p>
+                      {!last && (
+                        <p className="text-sm text-muted-foreground truncate">Nog geen berichten</p>
+                      )}
                     </div>
                   </Link>
                 </li>

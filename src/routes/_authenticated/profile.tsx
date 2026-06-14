@@ -1,16 +1,30 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2 } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2, LogOut, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { publicKeyFingerprint } from "@/lib/crypto";
 import { KeyQrCode } from "@/components/key-qr-code";
+import { AvatarCircle } from "@/components/avatar-circle";
+import { invalidateAvatarCache } from "@/lib/avatar-url";
 import { getMyInvite, rotateInvite, setHandle } from "@/lib/contacts.functions";
 import { buildInviteUrl } from "@/lib/pending-invite";
+import { detectIOSSafari, isAppInstalled } from "@/lib/install-prompt";
 import {
   getPushStatus,
   isSubscribed,
@@ -23,19 +37,41 @@ export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
 });
 
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+async function cropToSquareJpeg(file: File, size = 512): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const min = Math.min(bmp.width, bmp.height);
+  const sx = (bmp.width - min) / 2;
+  const sy = (bmp.height - min) / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bmp, sx, sy, min, min, 0, 0, size, size);
+  return await new Promise<Blob>((res) =>
+    canvas.toBlob((b) => res(b!), "image/jpeg", 0.88)!,
+  );
+}
+
 function ProfilePage() {
   const { user } = Route.useRouteContext();
+  const nav = useNavigate();
   const [name, setName] = useState("");
   const [handle, setHandleLocal] = useState("");
   const [savedHandle, setSavedHandle] = useState<string | null>(null);
   const [fp, setFp] = useState<string>("");
   const [pk, setPk] = useState<string>("");
+  const [avatarPath, setAvatarPath] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [handleBusy, setHandleBusy] = useState(false);
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushAvail, setPushAvail] = useState(false);
+  const [pushNote, setPushNote] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const fetchInvite = useServerFn(getMyInvite);
   const callRotate = useServerFn(rotateInvite);
@@ -43,15 +79,13 @@ function ProfilePage() {
 
   useEffect(() => {
     setPushAvail(pushSupported());
-    (async () => {
-      if (!pushSupported()) return;
-      const status = await getPushStatus();
-      setPushOn(status === "granted" && (await isSubscribed()));
-    })();
-  }, []);
-
-  useEffect(() => {
-    setPushAvail(pushSupported());
+    // iOS-in-browser kan geen push ontvangen: alleen geïnstalleerde PWA wel.
+    if (typeof window !== "undefined") {
+      const ios = detectIOSSafari();
+      if (ios && !isAppInstalled()) {
+        setPushNote("Op iPhone werkt push alleen nadat je de app via Safari aan je beginscherm toevoegt.");
+      }
+    }
     (async () => {
       if (!pushSupported()) return;
       const status = await getPushStatus();
@@ -78,7 +112,7 @@ function ProfilePage() {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("display_name, public_key, key_fingerprint, handle")
+      .select("display_name, public_key, key_fingerprint, handle, avatar_url")
       .eq("id", user.id)
       .single()
       .then(async ({ data }) => {
@@ -87,6 +121,7 @@ function ProfilePage() {
           setHandleLocal(data.handle ?? "");
           setSavedHandle(data.handle ?? null);
           setPk(data.public_key ?? "");
+          setAvatarPath(data.avatar_url ?? null);
           setFp(data.key_fingerprint ?? (data.public_key ? await publicKeyFingerprint(data.public_key) : ""));
         }
       });
@@ -129,6 +164,60 @@ function ProfilePage() {
     }
   }
 
+  async function onPickAvatar(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Kies een afbeelding");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES * 4) {
+      toast.error("Afbeelding te groot");
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const blob = await cropToSquareJpeg(file, 512);
+      const path = `${user.id}/avatar-${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage
+        .from("avatars")
+        .upload(path, blob, { contentType: "image/jpeg", upsert: true });
+      if (upErr) throw upErr;
+      // Verwijder eventuele oude avatar (best-effort)
+      if (avatarPath && avatarPath !== path) {
+        void supabase.storage.from("avatars").remove([avatarPath]);
+        invalidateAvatarCache(avatarPath);
+      }
+      const { error: updErr } = await supabase
+        .from("profiles")
+        .update({ avatar_url: path })
+        .eq("id", user.id);
+      if (updErr) throw updErr;
+      setAvatarPath(path);
+      toast.success("Avatar bijgewerkt");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Upload mislukt";
+      toast.error(msg);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function removeAvatar() {
+    if (!avatarPath) return;
+    setAvatarBusy(true);
+    try {
+      await supabase.storage.from("avatars").remove([avatarPath]);
+      await supabase.from("profiles").update({ avatar_url: null }).eq("id", user.id);
+      invalidateAvatarCache(avatarPath);
+      setAvatarPath(null);
+      toast.success("Avatar verwijderd");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Verwijderen mislukt";
+      toast.error(msg);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
   const inviteUrl = inviteToken ? buildInviteUrl(inviteToken) : "";
 
   async function shareInvite() {
@@ -146,6 +235,14 @@ function ProfilePage() {
     toast.success("Link gekopieerd");
   }
 
+  async function logout() {
+    // Belangrijk: we wissen de lokale privésleutel NIET. Die hoort bij dit
+    // apparaat en moet bij opnieuw inloggen meteen weer werken.
+    await supabase.auth.signOut();
+    toast.success("Uitgelogd");
+    nav({ to: "/auth" });
+  }
+
   return (
     <div className="min-h-dvh flex flex-col bg-background">
       <header className="bg-header text-header-foreground px-2 py-3 flex items-center gap-2 sticky top-0 z-10">
@@ -153,6 +250,48 @@ function ProfilePage() {
         <h1 className="text-lg font-semibold">Profiel</h1>
       </header>
       <main className="p-4 space-y-6 max-w-md mx-auto w-full">
+        <section className="flex items-center gap-4">
+          <div className="relative">
+            <AvatarCircle name={name || "?"} avatarUrl={avatarPath} size={72} />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={avatarBusy}
+              className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1.5 shadow-md disabled:opacity-50"
+              aria-label="Avatar wijzigen"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onPickAvatar(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm text-muted-foreground">Avatar</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Wordt vierkant bijgesneden. Alleen ingelogde gebruikers binnen je kring zien hem.
+            </p>
+            {avatarPath && (
+              <button
+                type="button"
+                onClick={removeAvatar}
+                disabled={avatarBusy}
+                className="text-xs underline text-muted-foreground mt-1"
+              >
+                Verwijderen
+              </button>
+            )}
+          </div>
+        </section>
+
         <section className="space-y-2">
           <label className="text-sm font-medium">Weergavenaam</label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -267,12 +406,38 @@ function ProfilePage() {
             wordt pas in de app ontsleuteld.
             {!pushAvail && " (Niet ondersteund op dit apparaat)"}
           </p>
+          {pushNote && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">{pushNote}</p>
+          )}
         </section>
 
         <section className="text-xs text-muted-foreground space-y-1">
           <p>📱 Je privésleutel staat alleen op dit apparaat (IndexedDB).</p>
           <p>🔒 De server slaat alleen versleutelde berichten op.</p>
           <p>🔔 Pushmeldingen bevatten nooit berichtinhoud.</p>
+        </section>
+
+        <section className="pt-8 mt-4 border-t">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="w-full justify-center">
+                <LogOut className="w-4 h-4 mr-2" /> Uitloggen
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Weet je zeker dat je wilt uitloggen?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Je privésleutel blijft op dit apparaat bewaard, dus je kunt later
+                  weer inloggen en je berichten lezen.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void logout()}>Uitloggen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </section>
       </main>
     </div>

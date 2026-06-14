@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { initials } from "@/lib/format";
+import { AvatarCircle } from "@/components/avatar-circle";
 import { toast } from "sonner";
 import { createGroupConversation } from "@/lib/conversations.functions";
 
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/groups/new")({
   component: NewGroup,
 });
 
-type Profile = { id: string; display_name: string; public_key: string | null };
+type Profile = { id: string; display_name: string; public_key: string | null; avatar_url: string | null };
 
 function NewGroup() {
   const { user } = Route.useRouteContext();
@@ -36,7 +36,7 @@ function NewGroup() {
       }
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, public_key")
+        .select("id, display_name, public_key, avatar_url")
         .in("id", ids)
         .order("display_name");
       setPeople((data as Profile[]) ?? []);
@@ -92,9 +92,7 @@ function NewGroup() {
                 onClick={() => toggle(p.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 ${disabled ? "opacity-50" : ""}`}
               >
-                <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center font-semibold">
-                  {initials(p.display_name)}
-                </div>
+                <AvatarCircle name={p.display_name} avatarUrl={p.avatar_url} size={48} />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{p.display_name}</div>
                   {disabled && <div className="text-xs text-muted-foreground">Nog geen sleutel</div>}

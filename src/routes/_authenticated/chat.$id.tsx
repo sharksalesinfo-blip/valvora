@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Send, Paperclip, ShieldCheck, ShieldAlert, ShieldQuestion, QrCode, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatTime, initials } from "@/lib/format";
+import { formatTime } from "@/lib/format";
+import { AvatarCircle } from "@/components/avatar-circle";
 import { toast } from "sonner";
 import {
   decryptFile,
@@ -51,7 +52,7 @@ type RenderedMessage = {
   pending?: boolean;
 };
 
-type Member = { user_id: string; display_name: string; public_key: string | null };
+type Member = { user_id: string; display_name: string; public_key: string | null; avatar_url: string | null };
 
 async function stripExifAndCompress(file: File): Promise<Uint8Array> {
   if (!file.type.startsWith("image/")) {
@@ -109,13 +110,14 @@ function ChatView() {
       const userIds = (ms ?? []).map((m) => m.user_id);
       const { data: profs } = await supabase
         .from("profiles")
-        .select("id, display_name, public_key")
+        .select("id, display_name, public_key, avatar_url")
         .in("id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]);
       setMembers(
         (profs ?? []).map((p) => ({
           user_id: p.id,
           display_name: p.display_name,
           public_key: p.public_key,
+          avatar_url: p.avatar_url ?? null,
         })),
       );
     })();
@@ -168,11 +170,11 @@ function ChatView() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.join(",")})` },
         (payload) => {
-          const row = payload.new as { id: string; display_name: string; public_key: string | null };
+          const row = payload.new as { id: string; display_name: string; public_key: string | null; avatar_url: string | null };
           setMembers((prev) =>
             prev.map((m) =>
               m.user_id === row.id
-                ? { ...m, display_name: row.display_name, public_key: row.public_key }
+                ? { ...m, display_name: row.display_name, public_key: row.public_key, avatar_url: row.avatar_url ?? null }
                 : m,
             ),
           );
@@ -380,9 +382,8 @@ function ChatView() {
     <div className="h-dvh flex flex-col bg-background">
       <header className="bg-header text-header-foreground px-2 py-2 flex items-center gap-2 sticky top-0 z-10">
         <Link to="/chats" className="p-2 rounded-full hover:bg-white/10"><ArrowLeft className="w-5 h-5" /></Link>
-        <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-sm font-semibold">
-          {initials(title)}
-        </div>
+        <AvatarCircle name={title} avatarUrl={directOther?.avatar_url ?? null} size={40} />
+
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate flex items-center gap-1.5">
             <span className="truncate">{title}</span>
