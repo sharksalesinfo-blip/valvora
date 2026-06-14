@@ -1,10 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatTime, initials } from "@/lib/format";
-import { LogOut, Plus, Users, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { formatTime } from "@/lib/format";
+import { Plus, Users, ShieldCheck, User as UserIcon } from "lucide-react";
+import { AvatarCircle } from "@/components/avatar-circle";
 
 export const Route = createFileRoute("/_authenticated/chats")({
   component: ChatsPage,
@@ -17,7 +16,11 @@ type ConvRow = {
   updated_at: string;
 };
 
-type Member = { conversation_id: string; user_id: string; profiles?: { display_name: string; avatar_url: string | null } | null };
+type Member = {
+  conversation_id: string;
+  user_id: string;
+  profiles?: { display_name: string; avatar_url: string | null } | null;
+};
 
 function ChatsPage() {
   const { user } = Route.useRouteContext();
