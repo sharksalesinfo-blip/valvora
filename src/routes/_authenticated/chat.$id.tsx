@@ -155,6 +155,9 @@ function ChatView() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<number | null>(null);
+  const [statuses, setStatuses] = useState<Map<string, StatusRow[]>>(new Map());
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState<boolean>(true);
+
 
   // Sleutel laden
   useEffect(() => {
