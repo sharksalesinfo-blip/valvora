@@ -118,6 +118,7 @@ export type Database = {
           id: string
           nonce: string
           recipient_id: string | null
+          reply_to_message_id: string | null
           sender_id: string
           type: Database["public"]["Enums"]["message_type"]
         }
@@ -129,6 +130,7 @@ export type Database = {
           id?: string
           nonce: string
           recipient_id?: string | null
+          reply_to_message_id?: string | null
           sender_id: string
           type?: Database["public"]["Enums"]["message_type"]
         }
@@ -140,6 +142,7 @@ export type Database = {
           id?: string
           nonce?: string
           recipient_id?: string | null
+          reply_to_message_id?: string | null
           sender_id?: string
           type?: Database["public"]["Enums"]["message_type"]
         }
@@ -149,6 +152,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
@@ -237,7 +247,7 @@ export type Database = {
     }
     Enums: {
       conversation_type: "direct" | "group"
-      message_type: "text" | "image"
+      message_type: "text" | "image" | "file" | "location"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -366,7 +376,7 @@ export const Constants = {
   public: {
     Enums: {
       conversation_type: ["direct", "group"],
-      message_type: ["text", "image"],
+      message_type: ["text", "image", "file", "location"],
     },
   },
 } as const
