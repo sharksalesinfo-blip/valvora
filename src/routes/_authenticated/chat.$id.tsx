@@ -80,10 +80,12 @@ type DbMessage = {
   attachment_path: string | null;
   created_at: string;
   reply_to_message_id: string | null;
+  group_id: string;
 };
 
 type RenderedMessage = {
   id: string;
+  group_id: string;
   sender_id: string;
   created_at: string;
   type: "text" | "image" | "file" | "location";
@@ -95,6 +97,7 @@ type RenderedMessage = {
   failed?: boolean;
   replyToId?: string | null;
 };
+
 
 type Member = {
   user_id: string;
