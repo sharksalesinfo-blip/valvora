@@ -31,6 +31,7 @@ import {
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
 import { clearAppBadge } from "@/lib/badge";
+import { setLastRead } from "@/lib/unread";
 import { VerifyContactDialog } from "@/components/verify-contact-dialog";
 import {
   loadVerifications,
