@@ -89,4 +89,4 @@ Wat een forker moet inrichten — de niet-vanzelfsprekende dingen eerst, want di
 
 ## Bijlage — discrepanties tussen aanname en code
 
-Tijdens het opstellen geen nieuwe discrepanties gevonden tussen wat in eerdere iteraties is gecommuniceerd en wat de code werkelijk doet. Eén punt dat wel benoemd moet blijven omdat het makkelijk vergeten wordt: de tijdelijke `supabase/functions/notify-test/` functie stuurt een testpush naar **álle** `push_subscriptions` en gebruikt de service-role key zonder caller-check. Verwijder hem voordat een instance productief gaat.
+Tijdens het opstellen geen discrepanties gevonden tussen wat in eerdere iteraties is gecommuniceerd en wat de code werkelijk doet. `notify` is bewust het enige pad dat pushes kan versturen, en doet dat alleen na een server-side membership-check op `conversation_members`. Er bestaat geen ongeautoriseerd "all-subscriptions"-pad.
