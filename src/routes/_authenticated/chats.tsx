@@ -73,12 +73,12 @@ function ChatsPage() {
 
     const { data: last } = await supabase
       .from("messages")
-      .select("conversation_id, created_at")
+      .select("conversation_id, created_at, sender_id")
       .in("conversation_id", ids)
       .order("created_at", { ascending: false });
-    const lm: Record<string, { created_at: string }> = {};
+    const lm: Record<string, { created_at: string; sender_id: string }> = {};
     for (const r of last ?? []) {
-      if (!lm[r.conversation_id]) lm[r.conversation_id] = { created_at: r.created_at };
+      if (!lm[r.conversation_id]) lm[r.conversation_id] = { created_at: r.created_at, sender_id: r.sender_id };
     }
     setLastMsg(lm);
   }
