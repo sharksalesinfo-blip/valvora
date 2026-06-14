@@ -94,7 +94,9 @@ function ChatsPage() {
       .channel("chats-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_members" }, () => load())
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log("[realtime] chats-list:", status, err ?? "");
+      });
     return () => {
       supabase.removeChannel(ch);
     };
