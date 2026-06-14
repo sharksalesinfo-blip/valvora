@@ -1,0 +1,1 @@
+CREATE POLICY "Users can delete own invite" ON public.user_invites FOR DELETE TO authenticated USING (user_id = auth.uid());
