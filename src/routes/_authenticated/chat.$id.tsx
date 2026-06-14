@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Send, Paperclip, ShieldCheck, ShieldAlert, ShieldQuestion, QrCode, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatTime, initials } from "@/lib/format";
+import { formatTime } from "@/lib/format";
+import { AvatarCircle } from "@/components/avatar-circle";
 import { toast } from "sonner";
 import {
   decryptFile,
@@ -169,11 +170,11 @@ function ChatView() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "profiles", filter: `id=in.(${ids.join(",")})` },
         (payload) => {
-          const row = payload.new as { id: string; display_name: string; public_key: string | null };
+          const row = payload.new as { id: string; display_name: string; public_key: string | null; avatar_url: string | null };
           setMembers((prev) =>
             prev.map((m) =>
               m.user_id === row.id
-                ? { ...m, display_name: row.display_name, public_key: row.public_key }
+                ? { ...m, display_name: row.display_name, public_key: row.public_key, avatar_url: row.avatar_url ?? null }
                 : m,
             ),
           );
