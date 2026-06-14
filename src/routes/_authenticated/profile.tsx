@@ -32,6 +32,8 @@ import {
   subscribePush,
   unsubscribePush,
 } from "@/lib/push";
+import { RecoverySection } from "@/components/recovery-section";
+import { getMyRecoveryStatus } from "@/lib/recovery.functions";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
