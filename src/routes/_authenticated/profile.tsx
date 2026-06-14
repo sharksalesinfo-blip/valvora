@@ -130,8 +130,10 @@ function ProfilePage() {
           setSavedHandle(data.handle ?? null);
           setPk(data.public_key ?? "");
           setAvatarPath(data.avatar_url ?? null);
+          setReadReceiptsEnabled(data.read_receipts_enabled ?? true);
           setFp(data.key_fingerprint ?? (data.public_key ? await publicKeyFingerprint(data.public_key) : ""));
         }
+
       });
     void fetchInvite().then((r) => setInviteToken(r.token)).catch(() => undefined);
     void fetchRecovery().then((s) => setRecoveryEnabled(s.enabled)).catch(() => setRecoveryEnabled(false));
