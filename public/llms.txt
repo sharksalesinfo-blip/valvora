@@ -1,0 +1,13 @@
+# valvora
+
+> End-to-end versleutelde chat voor je eigen kring — besloten en privé.
+
+valvora is een Nederlandse, end-to-end versleutelde berichten-app. Berichten worden in de browser versleuteld met de publieke sleutel van de ontvanger; de server ziet alleen ciphertext. Toegang loopt via uitnodiging: er zijn geen open registraties.
+
+## Pages
+
+- [Home](/): Introductie van valvora en uitleg over de versleutelde, besloten chat.
+
+## Optional
+
+- [Security](https://valvora.nl/SECURITY.md): Overzicht van het beveiligingsmodel, sleutelafhandeling en bewuste afwegingen.
