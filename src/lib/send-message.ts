@@ -21,6 +21,7 @@ export async function sendEnvelopeToConversation(opts: {
   replyToMessageId?: string | null;
 }): Promise<void> {
   const created_at = new Date().toISOString();
+  const group_id = (globalThis.crypto ?? crypto).randomUUID();
   const plaintext = encodeEnvelope(opts.envelope);
   const rows: Array<{
     conversation_id: string;
@@ -32,6 +33,7 @@ export async function sendEnvelopeToConversation(opts: {
     attachment_path: string | null;
     created_at: string;
     reply_to_message_id: string | null;
+    group_id: string;
   }> = [];
   for (const m of opts.members) {
     if (!m.public_key) continue;
@@ -46,8 +48,10 @@ export async function sendEnvelopeToConversation(opts: {
       attachment_path: opts.attachmentPath ?? null,
       created_at,
       reply_to_message_id: opts.replyToMessageId ?? null,
+      group_id,
     });
   }
+
   if (rows.length === 0) return;
   const { error } = await supabase.from("messages").insert(rows);
   if (error) throw error;
