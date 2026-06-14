@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2, LogOut, Camera } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2, LogOut, Camera, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
