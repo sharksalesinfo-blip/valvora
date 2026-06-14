@@ -382,9 +382,8 @@ function ChatView() {
     <div className="h-dvh flex flex-col bg-background">
       <header className="bg-header text-header-foreground px-2 py-2 flex items-center gap-2 sticky top-0 z-10">
         <Link to="/chats" className="p-2 rounded-full hover:bg-white/10"><ArrowLeft className="w-5 h-5" /></Link>
-        <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-sm font-semibold">
-          {initials(title)}
-        </div>
+        <AvatarCircle name={title} avatarUrl={directOther?.avatar_url ?? null} size={40} />
+
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate flex items-center gap-1.5">
             <span className="truncate">{title}</span>
