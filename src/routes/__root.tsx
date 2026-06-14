@@ -17,6 +17,9 @@ import { registerPushWorker } from "@/lib/pwa";
 // werkt de "Installeren"-knop nooit.
 import "@/lib/install-prompt";
 import { Toaster } from "@/components/ui/sonner";
+import { isMisconfiguredFork } from "@/lib/fork-guard";
+import { ForkMisconfigScreen } from "@/components/fork-misconfig-screen";
+
 
 function NotFoundComponent() {
   return (
@@ -147,8 +150,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const blocked = isMisconfiguredFork();
 
   useEffect(() => {
+    if (blocked) return;
     void registerPushWorker();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
@@ -156,7 +161,9 @@ function RootComponent() {
       }
     });
     return () => sub.subscription.unsubscribe();
-  }, [queryClient]);
+  }, [queryClient, blocked]);
+
+  if (blocked) return <ForkMisconfigScreen />;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -165,4 +172,5 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+
 

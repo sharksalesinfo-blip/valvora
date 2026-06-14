@@ -31,4 +31,9 @@ Stack: TanStack Start (React 19, Vite 7), Tailwind v4, libsodium voor crypto, Su
 
 ## Licentie
 
-MIT — zie `LICENSE`. *(Tijdelijk: licentiebestand staat nog niet in de repo; bevestig welke licentie je wilt voor we hem toevoegen.)*
+valvora staat onder de **GNU Affero General Public License v3.0** — zie [`LICENSE`](./LICENSE).
+
+**Wat dat in normale taal betekent voor een forker:** je mág valvora forken, aanpassen en zelf uitrollen. Maar zodra je je fork als dienst aanbiedt aan andere mensen — ook gratis, ook binnen één familie of vereniging — móet je je broncode inclusief jouw wijzigingen beschikbaar stellen aan die gebruikers. Dat is bewust gekozen: valvora is een privacy-app, en bij een privacy-app is het juist het punt dat iedereen kan controleren wat de code doet. Zonder die plicht zou een fork stilletjes de crypto kunnen wijzigen of telemetrie kunnen toevoegen zonder dat gebruikers het weten. Met AGPL blijft elke fork transparant.
+
+Praktisch: voeg een zichtbare link toe naar je broncode (bv. in de app-footer of `/about`), houd de licentietekst bij wat je distribueert, en wijzig of verwijder de licentievermelding niet.
+
