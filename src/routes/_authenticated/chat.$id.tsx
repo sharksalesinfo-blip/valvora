@@ -1,7 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Send, Paperclip, ShieldCheck, ShieldAlert, ShieldQuestion, QrCode, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  Paperclip,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  QrCode,
+  X,
+  Reply as ReplyIcon,
+  Forward,
+  Download,
+  FileText,
+  MapPin,
+  Image as ImageIcon,
+  File as FileIcon,
+  CornerDownRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/format";
 import { AvatarCircle } from "@/components/avatar-circle";
@@ -10,11 +27,9 @@ import {
   decryptFile,
   decryptMessage,
   encryptFile,
-  encryptMessage,
   sodiumReady,
 } from "@/lib/crypto";
 import { loadPrivateKey } from "@/lib/local-key-store";
-import { notifyConversation } from "@/lib/push";
 import { clearAppBadge } from "@/lib/badge";
 import { VerifyContactDialog } from "@/components/verify-contact-dialog";
 import {
@@ -22,12 +37,27 @@ import {
   reconcileVerification,
   type VerificationState,
 } from "@/lib/verification";
+import { decodeEnvelope, type EnvelopeV1 } from "@/lib/message-envelope";
+import {
+  loadConversationMembers,
+  sendEnvelopeToConversation,
+} from "@/lib/send-message";
+import { ConversationPicker } from "@/components/conversation-picker";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
 });
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_DOC_BYTES = 20 * 1024 * 1024;
 
 type DbMessage = {
   id: string;
@@ -36,23 +66,32 @@ type DbMessage = {
   recipient_id: string | null;
   ciphertext: string;
   nonce: string;
-  type: "text" | "image";
+  type: "text" | "image" | "file" | "location";
   attachment_path: string | null;
   created_at: string;
+  reply_to_message_id: string | null;
 };
 
 type RenderedMessage = {
   id: string;
   sender_id: string;
   created_at: string;
-  type: "text" | "image";
+  type: "text" | "image" | "file" | "location";
   text?: string;
   imageUrl?: string;
+  file?: { name: string; mime: string; size?: number; key: string; nonce: string; path: string };
+  location?: { lat: number; lng: number; acc?: number };
+  fwd?: boolean;
   failed?: boolean;
-  pending?: boolean;
+  replyToId?: string | null;
 };
 
-type Member = { user_id: string; display_name: string; public_key: string | null; avatar_url: string | null };
+type Member = {
+  user_id: string;
+  display_name: string;
+  public_key: string | null;
+  avatar_url: string | null;
+};
 
 async function stripExifAndCompress(file: File): Promise<Uint8Array> {
   if (!file.type.startsWith("image/")) {
@@ -68,8 +107,17 @@ async function stripExifAndCompress(file: File): Promise<Uint8Array> {
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(bmp, 0, 0, w, h);
-  const blob: Blob = await new Promise((res) => canvas.toBlob((b) => res(b!), "image/jpeg", 0.85)!);
+  const blob: Blob = await new Promise((res) =>
+    canvas.toBlob((b) => res(b!), "image/jpeg", 0.85)!,
+  );
   return new Uint8Array(await blob.arrayBuffer());
+}
+
+function humanSize(n?: number): string {
+  if (!n && n !== 0) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function ChatView() {
@@ -84,8 +132,16 @@ function ChatView() {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verification, setVerification] = useState<Map<string, VerificationState>>(new Map());
   const [dismissedChanges, setDismissedChanges] = useState<Set<string>>(new Set());
+  const [replyTo, setReplyTo] = useState<RenderedMessage | null>(null);
+  const [actionFor, setActionFor] = useState<RenderedMessage | null>(null);
+  const [forwardFor, setForwardFor] = useState<RenderedMessage | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationBusy, setLocationBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const longPressTimer = useRef<number | null>(null);
 
   // Sleutel laden
   useEffect(() => {
@@ -134,7 +190,6 @@ function ChatView() {
     [members, user.id],
   );
 
-  // Reconcile verificaties met huidige publieke sleutels (lokaal, server beslist niets).
   const reconcile = useCallback(async () => {
     if (otherMembers.length === 0) return;
     const cached = await loadVerifications(
@@ -158,9 +213,6 @@ function ChatView() {
     void reconcile();
   }, [reconcile]);
 
-  // Realtime: detecteer sleutelrotatie van een deelnemer terwijl de chat openstaat.
-  // Bij elke UPDATE op een profiel van een huidig lid werken we members bij; als de
-  // public_key veranderde, hertriggert de bestaande reconcile de amber-banner direct.
   useEffect(() => {
     const ids = otherMembers.map((m) => m.user_id);
     if (ids.length === 0) return;
@@ -186,7 +238,6 @@ function ChatView() {
     };
   }, [convId, otherMembers]);
 
-
   // Berichten laden + realtime
   useEffect(() => {
     if (!privKey) return;
@@ -196,9 +247,6 @@ function ChatView() {
     async function decryptOne(m: DbMessage): Promise<RenderedMessage> {
       try {
         const sender = memberById.get(m.sender_id);
-        // bij eigen verzending lazen we via ontvanger; voor eigen berichten staat recipient_id op de ander.
-        // Voor eigen weergave decrypten we met onze eigen private + zenders publieke; werkt voor inkomend.
-        // Voor uitgaand kan recipient_id == ons zelf zijn (group: 1 rij per lid incl. zelf).
         const otherPub = sender?.public_key;
         if (!otherPub) throw new Error("Geen publieke sleutel afzender");
         const plaintext = await decryptMessage(
@@ -206,23 +254,69 @@ function ChatView() {
           otherPub,
           privKey!,
         );
-        if (m.type === "image" && m.attachment_path) {
-          // text bevat JSON met file-key + nonce
-          const meta = JSON.parse(plaintext) as { key: string; nonce: string; mime?: string };
+        const env = decodeEnvelope(plaintext, m.type);
+
+        const base = {
+          id: m.id,
+          sender_id: m.sender_id,
+          created_at: m.created_at,
+          fwd: (env as { fwd?: boolean }).fwd ?? false,
+          replyToId: m.reply_to_message_id,
+        };
+
+        if (env.type === "text") {
+          return { ...base, type: "text", text: env.text };
+        }
+        if (env.type === "location") {
+          return { ...base, type: "location", location: env.location };
+        }
+        if ((env.type === "image" || env.type === "file") && m.attachment_path) {
           const { data: signed } = await supabase.storage
             .from("attachments")
             .createSignedUrl(m.attachment_path, 300);
           if (!signed?.signedUrl) throw new Error("Geen signed URL");
           const enc = new Uint8Array(await (await fetch(signed.signedUrl)).arrayBuffer());
-          const plainBytes = await decryptFile(enc, meta.nonce, meta.key);
-          const blob = new Blob([plainBytes.buffer as ArrayBuffer], { type: meta.mime ?? "image/jpeg" });
+          const plainBytes = await decryptFile(enc, env.file.nonce, env.file.key);
+          if (env.type === "image") {
+            const blob = new Blob([plainBytes.buffer as ArrayBuffer], { type: env.file.mime ?? "image/jpeg" });
+            const url = URL.createObjectURL(blob);
+            imageBlobUrls.push(url);
+            return {
+              ...base,
+              type: "image",
+              imageUrl: url,
+              file: { ...env.file, name: env.file.name ?? "afbeelding.jpg", path: m.attachment_path },
+            };
+          }
+          // file: keep decrypted bytes available via blob URL on-demand
+          const blob = new Blob([plainBytes.buffer as ArrayBuffer], { type: env.file.mime || "application/octet-stream" });
           const url = URL.createObjectURL(blob);
           imageBlobUrls.push(url);
-          return { id: m.id, sender_id: m.sender_id, created_at: m.created_at, type: "image", imageUrl: url };
+          return {
+            ...base,
+            type: "file",
+            imageUrl: url,
+            file: {
+              name: env.file.name ?? "bestand",
+              mime: env.file.mime || "application/octet-stream",
+              size: env.file.size,
+              key: env.file.key,
+              nonce: env.file.nonce,
+              path: m.attachment_path,
+            },
+          };
         }
-        return { id: m.id, sender_id: m.sender_id, created_at: m.created_at, type: "text", text: plaintext };
-      } catch (e) {
-        return { id: m.id, sender_id: m.sender_id, created_at: m.created_at, type: m.type, text: "🔒 (kon niet ontsleutelen)", failed: true };
+        return { ...base, type: "text", text: "(leeg)" };
+      } catch {
+        return {
+          id: m.id,
+          sender_id: m.sender_id,
+          created_at: m.created_at,
+          type: m.type,
+          text: "🔒 (kon niet ontsleutelen)",
+          failed: true,
+          replyToId: m.reply_to_message_id,
+        };
       }
     }
 
@@ -233,16 +327,10 @@ function ChatView() {
         .eq("conversation_id", convId)
         .order("created_at", { ascending: true });
       const rows = (data as DbMessage[]) ?? [];
-      // toon één bericht per (sender_id, created_at) — bij groepen schrijven we 1 rij per lid; dedupliceer voor de afzender.
       const seen = new Set<string>();
       const unique: DbMessage[] = [];
       for (const m of rows) {
-        // Eigen kant: alleen rijen waar recipient_id === user.id (zo gegarandeerd te ontsleutelen)
-        if (m.sender_id === user.id) {
-          if (m.recipient_id !== user.id) continue;
-        } else {
-          if (m.recipient_id !== user.id) continue;
-        }
+        if (m.recipient_id !== user.id) continue;
         const k = `${m.sender_id}-${m.created_at}-${m.type}`;
         if (seen.has(k)) continue;
         seen.add(k);
@@ -284,21 +372,32 @@ function ChatView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  async function send() {
+  async function sendText() {
     const body = text.trim();
     if (!body || !privKey) return;
     setText("");
+    const reply = replyTo;
+    setReplyTo(null);
     setBusy(true);
     try {
-      await sendEncrypted({ kind: "text", plaintext: body });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Verzenden mislukt");
+      await sendEnvelopeToConversation({
+        conversationId: convId,
+        senderId: user.id,
+        senderPrivateKey: privKey,
+        members,
+        dbType: "text",
+        envelope: { v: 1, type: "text", text: body },
+        replyToMessageId: reply?.id ?? null,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Verzenden mislukt";
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
 
-  async function pickFile(f: File) {
+  async function sendImage(f: File) {
     if (!privKey) return;
     if (f.size > MAX_IMAGE_BYTES * 2) {
       toast.error("Bestand is te groot (max ~10MB)");
@@ -312,7 +411,6 @@ function ChatView() {
         return;
       }
       const enc = await encryptFile(bytes);
-      // Pad: conversation_id/uuid.enc
       const path = `${convId}/${crypto.randomUUID()}.enc`;
       const { error: upErr } = await supabase.storage
         .from("attachments")
@@ -320,44 +418,239 @@ function ChatView() {
           contentType: "application/octet-stream",
         });
       if (upErr) throw upErr;
-      const meta = JSON.stringify({ key: enc.key, nonce: enc.nonce, mime: "image/jpeg" });
-      await sendEncrypted({ kind: "image", plaintext: meta, attachmentPath: path });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Upload mislukt");
+      const envelope: EnvelopeV1 = {
+        v: 1,
+        type: "image",
+        file: { key: enc.key, nonce: enc.nonce, mime: "image/jpeg", name: f.name, size: bytes.byteLength },
+      };
+      const reply = replyTo;
+      setReplyTo(null);
+      await sendEnvelopeToConversation({
+        conversationId: convId,
+        senderId: user.id,
+        senderPrivateKey: privKey,
+        members,
+        dbType: "image",
+        envelope,
+        attachmentPath: path,
+        replyToMessageId: reply?.id ?? null,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Upload mislukt";
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
 
-  async function sendEncrypted(opts: { kind: "text" | "image"; plaintext: string; attachmentPath?: string }) {
+  async function sendDocument(f: File) {
     if (!privKey) return;
-    const created_at = new Date().toISOString();
-    // Per lid (inclusief jezelf, zodat je je eigen bericht ook terugziet) één rij.
-    const rows = [];
-    for (const m of members) {
-      if (!m.public_key) {
-        toast.error(`${m.display_name} heeft geen sleutel — bericht wordt overgeslagen.`);
-        continue;
-      }
-      const enc = await encryptMessage(opts.plaintext, m.public_key, privKey);
-      rows.push({
-        conversation_id: convId,
-        sender_id: user.id,
-        recipient_id: m.user_id,
-        ciphertext: enc.ciphertext,
-        nonce: enc.nonce,
-        type: opts.kind,
-        attachment_path: opts.attachmentPath ?? null,
-        created_at,
-      });
+    if (f.size > MAX_DOC_BYTES) {
+      toast.error("Bestand is te groot (max 20MB)");
+      return;
     }
-    if (rows.length === 0) return;
-    const { error } = await supabase.from("messages").insert(rows);
-    if (error) throw error;
-    // bump conversation updated_at
-    await supabase.from("conversations").update({ updated_at: created_at }).eq("id", convId);
-    // Stuur neutrale push naar andere leden (fire-and-forget)
-    void notifyConversation(convId);
+    setBusy(true);
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const enc = await encryptFile(bytes);
+      const path = `${convId}/${crypto.randomUUID()}.enc`;
+      const { error: upErr } = await supabase.storage
+        .from("attachments")
+        .upload(path, new Blob([enc.ciphertext.buffer as ArrayBuffer], { type: "application/octet-stream" }), {
+          contentType: "application/octet-stream",
+        });
+      if (upErr) throw upErr;
+      const envelope: EnvelopeV1 = {
+        v: 1,
+        type: "file",
+        file: {
+          key: enc.key,
+          nonce: enc.nonce,
+          mime: f.type || "application/octet-stream",
+          name: f.name,
+          size: bytes.byteLength,
+        },
+      };
+      const reply = replyTo;
+      setReplyTo(null);
+      await sendEnvelopeToConversation({
+        conversationId: convId,
+        senderId: user.id,
+        senderPrivateKey: privKey,
+        members,
+        dbType: "file",
+        envelope,
+        attachmentPath: path,
+        replyToMessageId: reply?.id ?? null,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Upload mislukt";
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shareLocation() {
+    if (!privKey) return;
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      toast.error("Locatie niet ondersteund op dit toestel");
+      return;
+    }
+    setLocationBusy(true);
+    try {
+      const pos: GeolocationPosition = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        }),
+      );
+      const envelope: EnvelopeV1 = {
+        v: 1,
+        type: "location",
+        location: {
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+          acc: Math.round(pos.coords.accuracy),
+        },
+      };
+      const reply = replyTo;
+      setReplyTo(null);
+      await sendEnvelopeToConversation({
+        conversationId: convId,
+        senderId: user.id,
+        senderPrivateKey: privKey,
+        members,
+        dbType: "location",
+        envelope,
+        replyToMessageId: reply?.id ?? null,
+      });
+      setLocationOpen(false);
+    } catch (e: unknown) {
+      const msg =
+        e instanceof GeolocationPositionError || (e && typeof e === "object" && "code" in e)
+          ? "Geen toestemming of geen locatie beschikbaar"
+          : e instanceof Error
+            ? e.message
+            : "Locatie ophalen mislukt";
+      toast.error(msg);
+    } finally {
+      setLocationBusy(false);
+    }
+  }
+
+  async function forwardTo(targetConvId: string) {
+    const src = forwardFor;
+    if (!src || !privKey) return;
+    setForwardFor(null);
+    setBusy(true);
+    try {
+      const targetMembers = await loadConversationMembers(targetConvId);
+      if (targetMembers.length === 0) throw new Error("Geen leden gevonden");
+
+      if (src.type === "text") {
+        await sendEnvelopeToConversation({
+          conversationId: targetConvId,
+          senderId: user.id,
+          senderPrivateKey: privKey,
+          members: targetMembers,
+          dbType: "text",
+          envelope: { v: 1, type: "text", text: src.text ?? "", fwd: true },
+        });
+      } else if (src.type === "location" && src.location) {
+        await sendEnvelopeToConversation({
+          conversationId: targetConvId,
+          senderId: user.id,
+          senderPrivateKey: privKey,
+          members: targetMembers,
+          dbType: "location",
+          envelope: { v: 1, type: "location", location: src.location, fwd: true },
+        });
+      } else if ((src.type === "image" || src.type === "file") && src.file) {
+        // Re-encrypt het bestand met een NIEUWE sleutel en upload onder het doelpad
+        // (storage-RLS staat alleen leden toe te lezen via het pad-prefix).
+        const blob = await (await fetch(src.imageUrl!)).blob();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const enc = await encryptFile(bytes);
+        const path = `${targetConvId}/${crypto.randomUUID()}.enc`;
+        const { error: upErr } = await supabase.storage
+          .from("attachments")
+          .upload(path, new Blob([enc.ciphertext.buffer as ArrayBuffer], { type: "application/octet-stream" }), {
+            contentType: "application/octet-stream",
+          });
+        if (upErr) throw upErr;
+        const envelope: EnvelopeV1 = {
+          v: 1,
+          type: src.type,
+          file: {
+            key: enc.key,
+            nonce: enc.nonce,
+            mime: src.file.mime,
+            name: src.file.name,
+            size: src.file.size,
+          },
+          fwd: true,
+        };
+        await sendEnvelopeToConversation({
+          conversationId: targetConvId,
+          senderId: user.id,
+          senderPrivateKey: privKey,
+          members: targetMembers,
+          dbType: src.type,
+          envelope,
+          attachmentPath: path,
+        });
+      }
+      toast.success("Doorgestuurd");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Doorsturen mislukt";
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function downloadFile(m: RenderedMessage) {
+    if (!m.file || !m.imageUrl) return;
+    const a = document.createElement("a");
+    a.href = m.imageUrl;
+    a.download = m.file.name || "bestand";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function startLongPress(m: RenderedMessage) {
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+    longPressTimer.current = window.setTimeout(() => {
+      setActionFor(m);
+    }, 450);
+  }
+  function cancelLongPress() {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function scrollToMessage(id: string) {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) {
+      toast.message("Origineel bericht niet beschikbaar");
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary");
+    window.setTimeout(() => el.classList.remove("ring-2", "ring-primary"), 1500);
+  }
+
+  function previewOf(m: RenderedMessage): string {
+    if (m.type === "text") return (m.text ?? "").slice(0, 80);
+    if (m.type === "image") return "📷 Afbeelding";
+    if (m.type === "file") return `📎 ${m.file?.name ?? "Bestand"}`;
+    if (m.type === "location") return "📍 Locatie";
+    return "";
   }
 
   const title = conv?.type === "group"
@@ -368,22 +661,25 @@ function ChatView() {
     ? members.map((m) => m.display_name).join(", ")
     : "🔒 End-to-end versleuteld";
 
-  // Voor de header-badge bij direct chats: status van de andere persoon.
   const directOther = conv?.type === "direct" ? otherMembers[0] : null;
   const directState = directOther ? verification.get(directOther.user_id) : undefined;
 
-  // Banners: alle leden waarvan de sleutel net is veranderd én die je niet hebt weggeklikt.
   const changedMembers = otherMembers.filter((m) => {
     const s = verification.get(m.user_id);
     return s?.kind === "changed" && !dismissedChanges.has(m.user_id);
   });
+
+  const messagesById = useMemo(() => {
+    const m = new Map<string, RenderedMessage>();
+    for (const x of messages) m.set(x.id, x);
+    return m;
+  }, [messages]);
 
   return (
     <div className="h-dvh flex flex-col bg-background">
       <header className="bg-header text-header-foreground px-2 py-2 flex items-center gap-2 sticky top-0 z-10">
         <Link to="/chats" className="p-2 rounded-full hover:bg-white/10"><ArrowLeft className="w-5 h-5" /></Link>
         <AvatarCircle name={title} avatarUrl={directOther?.avatar_url ?? null} size={40} />
-
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate flex items-center gap-1.5">
             <span className="truncate">{title}</span>
@@ -463,31 +759,78 @@ function ChatView() {
         </div>
       )}
 
-      
       <div ref={scrollRef} className="flex-1 overflow-y-auto chat-surface px-3 py-4 space-y-2">
         {messages.map((m, i) => {
           const own = m.sender_id === user.id;
           const sender = memberById.get(m.sender_id);
           const showSender = conv?.type === "group" && !own && (i === 0 || messages[i - 1].sender_id !== m.sender_id);
+          const replied = m.replyToId ? messagesById.get(m.replyToId) : undefined;
           return (
-            <div key={m.id} className={`flex ${own ? "justify-end" : "justify-start"}`}>
+            <div key={m.id} id={`msg-${m.id}`} className={`flex ${own ? "justify-end" : "justify-start"} transition-shadow rounded-2xl`}>
               <div
-                className={`relative max-w-[78%] rounded-2xl px-3 py-2 shadow-sm ${
+                className={`relative max-w-[78%] rounded-2xl px-3 py-2 shadow-sm select-none ${
                   own
                     ? "bg-bubble-out text-bubble-out-foreground bubble-out rounded-br-sm"
                     : "bg-bubble-in text-bubble-in-foreground bubble-in rounded-bl-sm"
                 }`}
+                onPointerDown={() => startLongPress(m)}
+                onPointerUp={cancelLongPress}
+                onPointerLeave={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setActionFor(m);
+                }}
               >
                 {showSender && (
                   <div className="text-xs font-semibold text-primary mb-0.5">{sender?.display_name}</div>
                 )}
+                {m.fwd && (
+                  <div className="text-[11px] italic opacity-70 mb-1 flex items-center gap-1">
+                    <Forward className="w-3 h-3" /> Doorgestuurd
+                  </div>
+                )}
+                {m.replyToId && (
+                  <button
+                    type="button"
+                    onClick={() => scrollToMessage(m.replyToId!)}
+                    className="block w-full text-left mb-1 rounded-md border-l-2 border-primary/70 bg-black/5 dark:bg-white/10 px-2 py-1 text-xs"
+                  >
+                    <div className="font-medium text-primary truncate">
+                      {replied ? memberById.get(replied.sender_id)?.display_name ?? "Onbekend" : "Origineel"}
+                    </div>
+                    <div className="opacity-80 truncate">
+                      {replied ? previewOf(replied) : "Origineel bericht niet beschikbaar"}
+                    </div>
+                  </button>
+                )}
                 {m.type === "image" && m.imageUrl ? (
                   <img src={m.imageUrl} alt="" className="rounded-lg max-h-72 mb-1" />
                 ) : null}
-                {m.text && (
+                {m.type === "file" && m.file ? (
+                  <button
+                    type="button"
+                    onClick={() => downloadFile(m)}
+                    className="flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/10 px-2 py-2 mb-1 text-left w-full"
+                  >
+                    <FileText className="w-6 h-6 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{m.file.name}</div>
+                      <div className="text-[11px] opacity-70">{humanSize(m.file.size)}</div>
+                    </div>
+                    <Download className="w-4 h-4 opacity-70" />
+                  </button>
+                ) : null}
+                {m.type === "location" && m.location ? (
+                  <LocationCard location={m.location} />
+                ) : null}
+                {m.text && m.type === "text" && (
                   <div className={`whitespace-pre-wrap break-words text-[15px] ${m.failed ? "italic opacity-70" : ""}`}>
                     {m.text}
                   </div>
+                )}
+                {m.failed && m.type !== "text" && (
+                  <div className="text-xs italic opacity-70">{m.text}</div>
                 )}
                 <div className="text-[10px] opacity-60 text-right mt-0.5">{formatTime(m.created_at)}</div>
               </div>
@@ -501,21 +844,52 @@ function ChatView() {
         )}
       </div>
 
+      {/* Reply preview */}
+      {replyTo && (
+        <div className="bg-muted/60 border-t px-3 py-2 flex items-center gap-2">
+          <CornerDownRight className="w-4 h-4 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-primary truncate">
+              Antwoorden op {memberById.get(replyTo.sender_id)?.display_name ?? "Onbekend"}
+            </div>
+            <div className="text-xs text-muted-foreground truncate">{previewOf(replyTo)}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReplyTo(null)}
+            className="p-1 rounded hover:bg-muted"
+            aria-label="Annuleren"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="bg-card border-t p-2 flex items-end gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <input
-          ref={fileRef}
+          ref={imageInputRef}
           type="file"
           accept="image/*"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) void pickFile(f);
+            if (f) void sendImage(f);
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={docInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void sendDocument(f);
             e.target.value = "";
           }}
         />
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => setAttachOpen(true)}
           className="p-3 text-muted-foreground hover:text-foreground"
           aria-label="Bijlage"
         >
@@ -530,19 +904,207 @@ function ChatView() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              void send();
+              void sendText();
             }
           }}
         />
         <Button
           size="icon"
-          onClick={send}
+          onClick={sendText}
           disabled={busy || !text.trim()}
           className="rounded-full h-11 w-11 shrink-0"
         >
           <Send className="w-5 h-5" />
         </Button>
       </div>
+
+      {/* Attachment chooser */}
+      <Dialog open={attachOpen} onOpenChange={setAttachOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Bijlage toevoegen</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            <button
+              type="button"
+              className="flex flex-col items-center gap-1 py-3 rounded-lg hover:bg-muted"
+              onClick={() => {
+                setAttachOpen(false);
+                imageInputRef.current?.click();
+              }}
+            >
+              <ImageIcon className="w-6 h-6 text-primary" />
+              <span className="text-xs">Foto</span>
+            </button>
+            <button
+              type="button"
+              className="flex flex-col items-center gap-1 py-3 rounded-lg hover:bg-muted"
+              onClick={() => {
+                setAttachOpen(false);
+                docInputRef.current?.click();
+              }}
+            >
+              <FileIcon className="w-6 h-6 text-primary" />
+              <span className="text-xs">Document</span>
+            </button>
+            <button
+              type="button"
+              className="flex flex-col items-center gap-1 py-3 rounded-lg hover:bg-muted"
+              onClick={() => {
+                setAttachOpen(false);
+                setLocationOpen(true);
+              }}
+            >
+              <MapPin className="w-6 h-6 text-primary" />
+              <span className="text-xs">Locatie</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Location share confirm */}
+      <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Locatie delen</DialogTitle>
+            <DialogDescription>
+              Eénmalige momentopname van je huidige locatie. Geen live-tracking. De coördinaten worden
+              versleuteld verzonden — de server ziet ze niet.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setLocationOpen(false)} disabled={locationBusy}>
+              Annuleren
+            </Button>
+            <Button onClick={shareLocation} disabled={locationBusy}>
+              {locationBusy ? "Bezig…" : "Locatie delen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Long-press actions */}
+      <Dialog open={!!actionFor} onOpenChange={(o) => !o && setActionFor(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Bericht</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (actionFor) setReplyTo(actionFor);
+                setActionFor(null);
+              }}
+              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left"
+            >
+              <ReplyIcon className="w-5 h-5 text-primary" />
+              <span>Antwoorden</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (actionFor) setForwardFor(actionFor);
+                setActionFor(null);
+              }}
+              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left"
+            >
+              <Forward className="w-5 h-5 text-primary" />
+              <span>Doorsturen</span>
+            </button>
+            {actionFor?.type === "file" && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (actionFor) downloadFile(actionFor);
+                  setActionFor(null);
+                }}
+                className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left"
+              >
+                <Download className="w-5 h-5 text-primary" />
+                <span>Downloaden</span>
+              </button>
+            )}
+            {actionFor?.type === "text" && actionFor.text && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (actionFor?.text) {
+                    void navigator.clipboard.writeText(actionFor.text);
+                    toast.success("Gekopieerd");
+                  }
+                  setActionFor(null);
+                }}
+                className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted text-left"
+              >
+                <FileText className="w-5 h-5 text-primary" />
+                <span>Tekst kopiëren</span>
+              </button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Forward picker */}
+      <ConversationPicker
+        open={!!forwardFor}
+        onOpenChange={(o) => !o && setForwardFor(null)}
+        ownerId={user.id}
+        excludeConversationId={convId}
+        onPick={(targetId) => void forwardTo(targetId)}
+      />
+    </div>
+  );
+}
+
+function LocationCard({ location }: { location: { lat: number; lng: number; acc?: number } }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const mapsUrl = `https://www.openstreetmap.org/?mlat=${location.lat}&mlon=${location.lng}#map=16/${location.lat}/${location.lng}`;
+  return (
+    <div className="rounded-lg overflow-hidden bg-black/5 dark:bg-white/10 mb-1 w-[240px]">
+      {/* Lokale, statische weergave — geen externe call totdat de gebruiker bewust opent. */}
+      <div
+        className="h-28 relative bg-gradient-to-br from-emerald-100 to-emerald-300 dark:from-emerald-900/40 dark:to-emerald-700/40 flex items-center justify-center"
+        aria-label="Locatie"
+      >
+        <MapPin className="w-8 h-8 text-emerald-700 dark:text-emerald-300" />
+      </div>
+      <div className="px-2 py-2">
+        <div className="text-xs font-medium">Gedeelde locatie</div>
+        <div className="text-[11px] opacity-70 tabular-nums">
+          {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+          {location.acc ? ` · ±${location.acc} m` : ""}
+        </div>
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          className="mt-1 text-xs text-primary underline"
+        >
+          Open in kaart
+        </button>
+      </div>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Open in externe kaart?</DialogTitle>
+            <DialogDescription>
+              Door op openen te tikken open je OpenStreetMap in een nieuw tabblad. Die externe dienst
+              ontvangt dan de coördinaten. Wil je doorgaan?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Annuleren</Button>
+            <Button
+              onClick={() => {
+                window.open(mapsUrl, "_blank", "noopener,noreferrer");
+                setConfirmOpen(false);
+              }}
+            >
+              Openen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
