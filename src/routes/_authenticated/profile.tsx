@@ -75,7 +75,10 @@ function ProfilePage() {
   const [pushNote, setPushNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [recoveryEnabled, setRecoveryEnabled] = useState<boolean | null>(null);
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState<boolean>(true);
+  const [readReceiptsBusy, setReadReceiptsBusy] = useState(false);
   const fetchRecovery = useServerFn(getMyRecoveryStatus);
+
 
   const fetchInvite = useServerFn(getMyInvite);
   const callRotate = useServerFn(rotateInvite);
