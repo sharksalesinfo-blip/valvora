@@ -29,8 +29,9 @@ function ChatsPage() {
   
   const [convs, setConvs] = useState<ConvRow[]>([]);
   const [members, setMembers] = useState<Record<string, Member[]>>({});
-  const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string }>>({});
+  const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string; sender_id: string }>>({});
   const [me, setMe] = useState<{ display_name: string; avatar_url: string | null } | null>(null);
+  const [unreadTick, setUnreadTick] = useState(0);
 
   async function load() {
     const { data: myMem } = await supabase
