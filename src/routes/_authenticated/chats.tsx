@@ -98,8 +98,13 @@ function ChatsPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_members" }, () => load())
       .subscribe();
+    const onUnread = () => setUnreadTick((n) => n + 1);
+    window.addEventListener("unread-changed", onUnread);
+    window.addEventListener("focus", onUnread);
     return () => {
       supabase.removeChannel(ch);
+      window.removeEventListener("unread-changed", onUnread);
+      window.removeEventListener("focus", onUnread);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
