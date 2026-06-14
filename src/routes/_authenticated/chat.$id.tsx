@@ -18,7 +18,10 @@ import {
   Image as ImageIcon,
   File as FileIcon,
   CornerDownRight,
+  Check,
+  CheckCheck,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/format";
 import { AvatarCircle } from "@/components/avatar-circle";
@@ -45,6 +48,11 @@ import {
 } from "@/lib/send-message";
 import { ConversationPicker } from "@/components/conversation-picker";
 import {
+  aggregateStatus,
+  writeStatus,
+  type StatusRow,
+} from "@/lib/message-status";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -52,6 +60,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
@@ -71,10 +80,12 @@ type DbMessage = {
   attachment_path: string | null;
   created_at: string;
   reply_to_message_id: string | null;
+  group_id: string;
 };
 
 type RenderedMessage = {
   id: string;
+  group_id: string;
   sender_id: string;
   created_at: string;
   type: "text" | "image" | "file" | "location";
@@ -86,6 +97,7 @@ type RenderedMessage = {
   failed?: boolean;
   replyToId?: string | null;
 };
+
 
 type Member = {
   user_id: string;
@@ -143,6 +155,9 @@ function ChatView() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<number | null>(null);
+  const [statuses, setStatuses] = useState<Map<string, StatusRow[]>>(new Map());
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState<boolean>(true);
+
 
   // Sleutel laden
   useEffect(() => {
@@ -150,6 +165,25 @@ function ChatView() {
     void clearAppBadge();
     setLastRead(convId);
   }, [user.id, convId]);
+
+  // Eigen instelling voor leesbevestigingen (wederkerig: uit = geen 'read'
+  // schrijven én geen blauw zien van anderen).
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("profiles")
+      .select("read_receipts_enabled")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data) setReadReceiptsEnabled(data.read_receipts_enabled ?? true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+
 
   // Markeer als gelezen wanneer er nieuwe berichten binnenkomen terwijl deze chat open is.
   useEffect(() => {
@@ -271,11 +305,13 @@ function ChatView() {
 
         const base = {
           id: m.id,
+          group_id: m.group_id,
           sender_id: m.sender_id,
           created_at: m.created_at,
           fwd: (env as { fwd?: boolean }).fwd ?? false,
           replyToId: m.reply_to_message_id,
         };
+
 
         if (env.type === "text") {
           return { ...base, type: "text", text: env.text };
@@ -323,6 +359,7 @@ function ChatView() {
       } catch {
         return {
           id: m.id,
+          group_id: m.group_id,
           sender_id: m.sender_id,
           created_at: m.created_at,
           type: m.type,
@@ -330,6 +367,7 @@ function ChatView() {
           failed: true,
           replyToId: m.reply_to_message_id,
         };
+
       }
     }
 
@@ -351,6 +389,27 @@ function ChatView() {
       }
       const rendered = await Promise.all(unique.map(decryptOne));
       if (!cancelled) setMessages(rendered);
+      // Schrijf 'delivered' (en als zichtbaar én leesbevestigingen aan: 'read')
+      // voor binnenkomende berichten van anderen.
+      const visible =
+        typeof document !== "undefined" && document.visibilityState === "visible";
+      for (const m of unique) {
+        if (m.sender_id === user.id) continue;
+        void writeStatus({
+          groupId: m.group_id,
+          conversationId: convId,
+          userId: user.id,
+          status: "delivered",
+        });
+        if (visible && readReceiptsEnabled) {
+          void writeStatus({
+            groupId: m.group_id,
+            conversationId: convId,
+            userId: user.id,
+            status: "read",
+          });
+        }
+      }
     }
 
     void load();
@@ -368,9 +427,29 @@ function ChatView() {
             if (prev.some((p) => p.id === rendered.id)) return prev;
             return [...prev, rendered];
           });
+          // Aflevering bevestigen (en lezen als de chat open en zichtbaar is).
+          void writeStatus({
+            groupId: m.group_id,
+            conversationId: convId,
+            userId: user.id,
+            status: "delivered",
+          });
+          if (
+            typeof document !== "undefined" &&
+            document.visibilityState === "visible" &&
+            readReceiptsEnabled
+          ) {
+            void writeStatus({
+              groupId: m.group_id,
+              conversationId: convId,
+              userId: user.id,
+              status: "read",
+            });
+          }
         },
       )
       .subscribe();
+
 
     return () => {
       cancelled = true;
@@ -384,6 +463,78 @@ function ChatView() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
+
+  // Aflever-/leesstatussen laden + realtime updates voor dit gesprek.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("message_status")
+        .select("group_id, user_id, status, at")
+        .eq("conversation_id", convId);
+      if (cancelled || !data) return;
+      const map = new Map<string, StatusRow[]>();
+      for (const r of data as StatusRow[]) {
+        const arr = map.get(r.group_id) ?? [];
+        arr.push(r);
+        map.set(r.group_id, arr);
+      }
+      setStatuses(map);
+    })();
+
+    const ch = supabase
+      .channel(`status:${convId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_status",
+          filter: `conversation_id=eq.${convId}`,
+        },
+        (payload) => {
+          const r = payload.new as StatusRow & { conversation_id: string };
+          setStatuses((prev) => {
+            const arr = prev.get(r.group_id) ?? [];
+            if (arr.some((x) => x.user_id === r.user_id && x.status === r.status)) return prev;
+            const next = new Map(prev);
+            next.set(r.group_id, [...arr, { group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at }]);
+            return next;
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(ch);
+    };
+  }, [convId]);
+
+  // Wanneer het venster zichtbaar wordt (of leesbevestigingen aangaan), 'read'
+  // schrijven voor binnenkomende berichten die nog niet als gelezen gemarkeerd zijn.
+  useEffect(() => {
+    if (!readReceiptsEnabled) return;
+    const markVisibleAsRead = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      for (const m of messages) {
+        if (m.sender_id === user.id) continue;
+        const rows = statuses.get(m.group_id) ?? [];
+        if (rows.some((r) => r.user_id === user.id && r.status === "read")) continue;
+        void writeStatus({
+          groupId: m.group_id,
+          conversationId: convId,
+          userId: user.id,
+          status: "read",
+        });
+      }
+    };
+    markVisibleAsRead();
+    document.addEventListener("visibilitychange", markVisibleAsRead);
+    return () => document.removeEventListener("visibilitychange", markVisibleAsRead);
+  }, [messages, statuses, readReceiptsEnabled, convId, user.id]);
+
+
 
   async function sendText() {
     const body = text.trim();
@@ -845,7 +996,25 @@ function ChatView() {
                 {m.failed && m.type !== "text" && (
                   <div className="text-xs italic opacity-70">{m.text}</div>
                 )}
-                <div className="text-[10px] opacity-60 text-right mt-0.5">{formatTime(m.created_at)}</div>
+                <div className="text-[10px] opacity-60 text-right mt-0.5 flex items-center justify-end gap-1">
+                  <span>{formatTime(m.created_at)}</span>
+                  {own && !m.failed && (() => {
+                    const rows = statuses.get(m.group_id) ?? [];
+                    const agg = aggregateStatus({
+                      rowsForGroup: rows,
+                      otherMemberCount: Math.max(0, members.length - 1),
+                      showRead: readReceiptsEnabled,
+                    });
+                    if (agg === "read") {
+                      return <CheckCheck className="w-3.5 h-3.5 text-sky-400" aria-label="Gelezen" />;
+                    }
+                    if (agg === "delivered") {
+                      return <CheckCheck className="w-3.5 h-3.5 opacity-80" aria-label="Afgeleverd" />;
+                    }
+                    return <Check className="w-3.5 h-3.5 opacity-80" aria-label="Verstuurd" />;
+                  })()}
+                </div>
+
               </div>
             </div>
           );

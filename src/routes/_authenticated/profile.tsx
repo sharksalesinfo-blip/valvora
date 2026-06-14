@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2, LogOut, Camera } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Copy, Bell, QrCode, Link2, RefreshCw, AtSign, Share2, LogOut, Camera, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -75,7 +75,10 @@ function ProfilePage() {
   const [pushNote, setPushNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [recoveryEnabled, setRecoveryEnabled] = useState<boolean | null>(null);
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState<boolean>(true);
+  const [readReceiptsBusy, setReadReceiptsBusy] = useState(false);
   const fetchRecovery = useServerFn(getMyRecoveryStatus);
+
 
   const fetchInvite = useServerFn(getMyInvite);
   const callRotate = useServerFn(rotateInvite);
@@ -113,10 +116,27 @@ function ProfilePage() {
     }
   }
 
+  async function toggleReadReceipts(on: boolean) {
+    setReadReceiptsBusy(true);
+    const prev = readReceiptsEnabled;
+    setReadReceiptsEnabled(on);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ read_receipts_enabled: on })
+      .eq("id", user.id);
+    setReadReceiptsBusy(false);
+    if (error) {
+      setReadReceiptsEnabled(prev);
+      toast.error(error.message);
+    }
+  }
+
+
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("display_name, public_key, key_fingerprint, handle, avatar_url")
+      .select("display_name, public_key, key_fingerprint, handle, avatar_url, read_receipts_enabled")
+
       .eq("id", user.id)
       .single()
       .then(async ({ data }) => {
@@ -126,8 +146,10 @@ function ProfilePage() {
           setSavedHandle(data.handle ?? null);
           setPk(data.public_key ?? "");
           setAvatarPath(data.avatar_url ?? null);
+          setReadReceiptsEnabled(data.read_receipts_enabled ?? true);
           setFp(data.key_fingerprint ?? (data.public_key ? await publicKeyFingerprint(data.public_key) : ""));
         }
+
       });
     void fetchInvite().then((r) => setInviteToken(r.token)).catch(() => undefined);
     void fetchRecovery().then((s) => setRecoveryEnabled(s.enabled)).catch(() => setRecoveryEnabled(false));
@@ -417,6 +439,26 @@ function ProfilePage() {
             <p className="text-xs text-amber-700 dark:text-amber-300">{pushNote}</p>
           )}
         </section>
+
+        <section className="bg-card border rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <CheckCheck className="w-4 h-4 text-primary" /> Leesbevestigingen
+            </div>
+            <Switch
+              checked={readReceiptsEnabled}
+              disabled={readReceiptsBusy}
+              onCheckedChange={(v) => void toggleReadReceipts(v)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Blauwe vinkjes voor "gelezen". Wederkerig: zet je dit uit, dan stuurt
+            jouw app geen leesbevestigingen meer én zie je ook geen blauwe vinkjes
+            van anderen. Verstuurd en afgeleverd (één en twee grijze vinkjes)
+            blijven altijd zichtbaar.
+          </p>
+        </section>
+
 
         <section className="text-xs text-muted-foreground space-y-1">
           <p>📱 Je privésleutel staat alleen op dit apparaat (IndexedDB).</p>
