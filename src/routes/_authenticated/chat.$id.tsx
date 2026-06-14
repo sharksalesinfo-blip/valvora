@@ -283,11 +283,13 @@ function ChatView() {
 
         const base = {
           id: m.id,
+          group_id: m.group_id,
           sender_id: m.sender_id,
           created_at: m.created_at,
           fwd: (env as { fwd?: boolean }).fwd ?? false,
           replyToId: m.reply_to_message_id,
         };
+
 
         if (env.type === "text") {
           return { ...base, type: "text", text: env.text };
