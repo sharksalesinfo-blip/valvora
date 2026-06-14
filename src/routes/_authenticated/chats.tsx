@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatTime } from "@/lib/format";
 import { Plus, Users, ShieldCheck } from "lucide-react";
 import { AvatarCircle } from "@/components/avatar-circle";
+import { isUnread } from "@/lib/unread";
 
 
 export const Route = createFileRoute("/_authenticated/chats")({
