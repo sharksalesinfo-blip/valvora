@@ -1007,6 +1007,7 @@ function ChatView() {
                       rowsForGroup: rows,
                       otherMemberCount: Math.max(0, members.length - 1),
                       showRead: readReceiptsEnabled,
+                      selfUserId: user.id,
                     });
                     if (agg === "read") {
                       return <CheckCheck className="w-3.5 h-3.5 text-sky-400" aria-label="Gelezen" />;
