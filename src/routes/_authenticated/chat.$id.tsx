@@ -348,7 +348,7 @@ function ChatView() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${convId}` },
         async (payload) => {
-          console.log("[realtime] chat insert received", payload.new);
+          toast.info("RT: insert received");
           const m = payload.new as DbMessage;
           if (m.recipient_id !== user.id) return;
           const rendered = await decryptOne(m);
@@ -359,7 +359,7 @@ function ChatView() {
         },
       )
       .subscribe((status, err) => {
-        console.log(`[realtime] chat:${convId}:`, status, err ?? "");
+        toast.message(`RT chat: ${status}${err ? ` — ${err.message ?? err}` : ""}`);
       });
 
     return () => {

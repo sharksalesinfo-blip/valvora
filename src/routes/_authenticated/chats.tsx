@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatTime } from "@/lib/format";
 import { Plus, Users, ShieldCheck } from "lucide-react";
 import { AvatarCircle } from "@/components/avatar-circle";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chats")({
   component: ChatsPage,
@@ -92,10 +93,13 @@ function ChatsPage() {
       });
     const ch = supabase
       .channel("chats-list")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
+        toast.info("RT: messages event");
+        load();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_members" }, () => load())
       .subscribe((status, err) => {
-        console.log("[realtime] chats-list:", status, err ?? "");
+        toast.message(`RT chats-list: ${status}${err ? ` — ${err.message ?? err}` : ""}`);
       });
     return () => {
       supabase.removeChannel(ch);
