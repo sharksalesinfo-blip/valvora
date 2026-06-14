@@ -118,8 +118,8 @@ function ChatsPage() {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Link to="/profile" className="p-2 rounded-full hover:bg-white/10" aria-label="Profiel">
-            <UserIcon className="w-5 h-5" />
+          <Link to="/profile" className="p-1 rounded-full hover:bg-white/10" aria-label="Profiel">
+            <AvatarCircle name={me?.display_name ?? "?"} avatarUrl={me?.avatar_url ?? null} size={36} />
           </Link>
         </div>
       </header>
