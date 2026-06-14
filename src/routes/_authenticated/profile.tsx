@@ -440,6 +440,26 @@ function ProfilePage() {
           )}
         </section>
 
+        <section className="bg-card border rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <CheckCheck className="w-4 h-4 text-primary" /> Leesbevestigingen
+            </div>
+            <Switch
+              checked={readReceiptsEnabled}
+              disabled={readReceiptsBusy}
+              onCheckedChange={(v) => void toggleReadReceipts(v)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Blauwe vinkjes voor "gelezen". Wederkerig: zet je dit uit, dan stuurt
+            jouw app geen leesbevestigingen meer én zie je ook geen blauwe vinkjes
+            van anderen. Verstuurd en afgeleverd (één en twee grijze vinkjes)
+            blijven altijd zichtbaar.
+          </p>
+        </section>
+
+
         <section className="text-xs text-muted-foreground space-y-1">
           <p>📱 Je privésleutel staat alleen op dit apparaat (IndexedDB).</p>
           <p>🔒 De server slaat alleen versleutelde berichten op.</p>
