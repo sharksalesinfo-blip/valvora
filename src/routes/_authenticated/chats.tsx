@@ -24,7 +24,7 @@ type Member = {
 
 function ChatsPage() {
   const { user } = Route.useRouteContext();
-  const nav = useNavigate();
+  
   const [convs, setConvs] = useState<ConvRow[]>([]);
   const [members, setMembers] = useState<Record<string, Member[]>>({});
   const [lastMsg, setLastMsg] = useState<Record<string, { created_at: string }>>({});
