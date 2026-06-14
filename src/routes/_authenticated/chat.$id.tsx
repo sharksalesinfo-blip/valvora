@@ -427,6 +427,9 @@ function ChatView() {
             if (prev.some((p) => p.id === rendered.id)) return prev;
             return [...prev, rendered];
           });
+          // Statussen alleen schrijven voor berichten van anderen — niet voor
+          // de eigen-kopie van wat jij zelf verstuurt (anders direct blauw).
+          if (m.sender_id === user.id) return;
           // Aflevering bevestigen (en lezen als de chat open en zichtbaar is).
           void writeStatus({
             groupId: m.group_id,
@@ -1004,6 +1007,7 @@ function ChatView() {
                       rowsForGroup: rows,
                       otherMemberCount: Math.max(0, members.length - 1),
                       showRead: readReceiptsEnabled,
+                      selfUserId: user.id,
                     });
                     if (agg === "read") {
                       return <CheckCheck className="w-3.5 h-3.5 text-sky-400" aria-label="Gelezen" />;
