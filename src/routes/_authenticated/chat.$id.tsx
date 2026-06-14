@@ -48,6 +48,11 @@ import {
 } from "@/lib/send-message";
 import { ConversationPicker } from "@/components/conversation-picker";
 import {
+  aggregateStatus,
+  writeStatus,
+  type StatusRow,
+} from "@/lib/message-status";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -55,6 +60,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+
 
 export const Route = createFileRoute("/_authenticated/chat/$id")({
   component: ChatView,
