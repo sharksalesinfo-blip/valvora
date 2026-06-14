@@ -28,8 +28,12 @@ valvora is gebouwd voor besloten kringen (familie, vrienden, vaste teams). Het i
   - contactenlijst en geverifieerd-status (`contacts`, `contact_verifications`)
   - push-subscription endpoints (`push_subscriptions`)
   - groepsnamen (voor type=group conversations)
+  - **aflever- en leesstatus per bericht** (`message_status`): welk bericht (group_id), welke ontvanger, welk tijdstip en welk niveau (afgeleverd of gelezen). Dit zegt iets over wie wanneer online was en wie wanneer las — bewust benoemd als uitbreiding van de metadata-grens.
 
   **Inhoud van berichten en bestanden is dat niet** — alleen ciphertext + nonce staat op de server.
+
+- **Leesbevestigingen zijn uitschakelbaar en wederkerig** (`profiles.read_receipts_enabled`, standaard aan). Zet een gebruiker ze uit, dan schrijft zijn client geen `read`-status meer én verbergt hij ook de blauwe vinkjes van anderen. Het `delivered`-niveau (twee grijze vinkjes) blijft altijd actief — dat zegt iets over de techniek, niet over gedrag.
+
 
 - **Geen forward secrecy.** Elke gebruiker heeft één X25519-sleutelpaar dat over de hele levensduur van het account hergebruikt wordt. Als een private key ooit lekt, is in principe alle eerdere én latere inhoud van die gebruiker leesbaar voor wie ook de ciphertext bezit. Dit is een bewuste keuze: een Signal-achtig double-ratchet protocol is niet geïmplementeerd omdat zelfgebouwde crypto op dat niveau meer risico dan winst geeft.
 - **Sleutelopslag is browser-IndexedDB, geen hardware-enclave.** Zie `src/lib/local-key-store.ts`. Een browser kent geen écht veilige, niet-exporteerbare opslag voor X25519. Bij apparaat-toegang of malware op het apparaat is de private key in principe uitleesbaar door code in dezelfde origin.
