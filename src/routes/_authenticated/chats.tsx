@@ -143,6 +143,8 @@ function ChatsPage() {
             {convs.map((c) => {
               const d = displayFor(c);
               const last = lastMsg[c.id];
+              const unread = isUnread(c.id, last?.created_at, last?.sender_id, user.id);
+              void unreadTick;
               return (
                 <li key={c.id}>
                   <Link
@@ -158,13 +160,27 @@ function ChatsPage() {
                       <AvatarCircle name={d.name} avatarUrl={d.avatar} size={48} />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline">
-                        <span className="font-medium truncate">{d.name}</span>
-                        {last && <span className="text-xs text-muted-foreground shrink-0 ml-2">{formatTime(last.created_at)}</span>}
+                      <div className="flex justify-between items-baseline gap-2">
+                        <span className={`truncate ${unread ? "font-semibold" : "font-medium"}`}>{d.name}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {last && (
+                            <span className={`text-xs ${unread ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                              {formatTime(last.created_at)}
+                            </span>
+                          )}
+                          {unread && (
+                            <span
+                              aria-label="Nieuw bericht"
+                              className="w-2.5 h-2.5 rounded-full bg-primary shrink-0"
+                            />
+                          )}
+                        </div>
                       </div>
-                      {!last && (
+                      {!last ? (
                         <p className="text-sm text-muted-foreground truncate">Nog geen berichten</p>
-                      )}
+                      ) : unread ? (
+                        <p className="text-sm text-primary truncate">Nieuw bericht</p>
+                      ) : null}
                     </div>
                   </Link>
                 </li>
