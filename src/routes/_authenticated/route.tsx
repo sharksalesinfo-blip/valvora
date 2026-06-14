@@ -8,6 +8,7 @@ import { takePendingInvite } from "@/lib/pending-invite";
 import { joinByInvite } from "@/lib/contacts.functions";
 import { toast } from "sonner";
 import { OnboardingPrompt } from "@/components/onboarding-prompt";
+import { FirstRunWelcome } from "@/components/first-run-welcome";
 import { installBadgeResetOnForeground } from "@/lib/badge";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -25,6 +26,7 @@ function AuthedLayout() {
   const nav = useNavigate();
   const join = useServerFn(joinByInvite);
   const [ready, setReady] = useState(false);
+  const [welcomeDone, setWelcomeDone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +40,6 @@ function AuthedLayout() {
       if (cancelled) return;
       setReady(true);
 
-      // Consume pending invite from /join → /auth → here
       const pending = takePendingInvite();
       if (pending) {
         try {
@@ -69,6 +70,7 @@ function AuthedLayout() {
   }
   return (
     <>
+      {!welcomeDone && <FirstRunWelcome userId={user.id} onDone={() => setWelcomeDone(true)} />}
       <OnboardingPrompt userId={user.id} />
       <Outlet />
     </>
