@@ -12,6 +12,10 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { registerPushWorker } from "@/lib/pwa";
+// Eager import zorgt dat de `beforeinstallprompt`-listener al klaarstaat
+// vóórdat React de eerste route mount — anders mist Chrome het event en
+// werkt de "Installeren"-knop nooit.
+import "@/lib/install-prompt";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
