@@ -54,7 +54,24 @@ valvora is gebouwd voor besloten kringen (familie, vrienden, vaste teams). Het i
 
 Een fork is een **gesloten eiland**: gebruikers op verschillende valvora-instances kunnen niet met elkaar chatten. Dat is bewust en past bij het "losse kring"-model.
 
-Wat een forker moet inrichten — de niet-vanzelfsprekende dingen eerst, want die falen anders stil:
+### Fork-checklist (lees dit eerst)
+
+Loop deze vijf punten af **vóór** je de fork live zet. Punt 1 is niet-overslaan-baar: zonder eigen backend maken jouw gebruikers accounts aan in de database van iemand anders.
+
+1. **Eigen backend.** Maak een nieuw, leeg Supabase/Lovable Cloud-project. Overschrijf in `.env`:
+   - `VITE_SUPABASE_URL` en `SUPABASE_URL` → jouw nieuwe project-URL
+   - `VITE_SUPABASE_PUBLISHABLE_KEY` en `SUPABASE_PUBLISHABLE_KEY` → jouw publishable/anon-key
+   - `VITE_SUPABASE_PROJECT_ID` en `SUPABASE_PROJECT_ID` → jouw project-ref
+
+   Draai **nooit** met de originele waarden. Zie ook de "originele-instance-check" hieronder.
+2. **Eigen VAPID-paar.** Genereer een vers keypair (web-push standaard, P-256). Hergebruik nooit dat van de oorspronkelijke instance. Zet als serverside secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, en `VAPID_SUBJECT` als geldige URL (`mailto:jij@domein.tld` of `https://domein.tld`). De public key komt automatisch in de client via `src/lib/vapid.functions.ts`.
+3. **Vereisten die anders stil falen.** Zie de detail-lijst onder deze checklist: `libsodium-wrappers-sumo` (niet de minimal build), anonymous sign-ins AAN in Supabase, alle migraties toepassen, buckets `attachments` + `avatars` privé, `notify` edge function deployen — en géén debug-/test-pushfunctie meedeployen.
+4. **Branding & SEO.** Pas alle verwijzingen naar `valvora` / `valvora.nl` aan naar je eigen naam en domein: `public/manifest.webmanifest`, JSON-LD-blok in `src/routes/__root.tsx`, `public/llms.txt`, `public/robots.txt`, `public/sitemap.xml`, `public/valvora-icon.svg` en `public/valvora-og.png.asset.json`. Anders draai je onder andermans merk met duplicate content.
+5. **Licentie & herkomst.** Voeg een licentiebestand toe (zie `LICENSE` in de repo) en zet bovenaan je README: "Dit is een fork van valvora; dit is niet de officiële instance." Eindgebruikers moeten weten met wiens code en instance ze praten — relevant omdat een forker `src/lib/crypto.ts` kan wijzigen.
+
+### Detail-lijst: wat een forker moet inrichten
+
+
 
 - **`libsodium-wrappers-sumo` is vereist**, niet `libsodium-wrappers` (de minimal build). De minimal build mist `crypto_pwhash` (Argon2id); de app compileert dan schoon maar de herstelcode crasht bij runtime. Zie `package.json` en alle imports in `src/lib/crypto.ts` / `src/lib/recovery.ts`.
 - **Anonymous sign-ins moeten AAN staan** in het Supabase-project. Anders mislukt elke aanmelding direct, zonder duidelijke foutmelding voor de eindgebruiker.
