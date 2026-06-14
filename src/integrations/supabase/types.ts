@@ -145,12 +145,45 @@ export type Database = {
         }
         Relationships: []
       }
+      message_status: {
+        Row: {
+          at: string
+          conversation_id: string
+          group_id: string
+          status: Database["public"]["Enums"]["message_status_kind"]
+          user_id: string
+        }
+        Insert: {
+          at?: string
+          conversation_id: string
+          group_id: string
+          status: Database["public"]["Enums"]["message_status_kind"]
+          user_id: string
+        }
+        Update: {
+          at?: string
+          conversation_id?: string
+          group_id?: string
+          status?: Database["public"]["Enums"]["message_status_kind"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_status_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachment_path: string | null
           ciphertext: string
           conversation_id: string
           created_at: string
+          group_id: string
           id: string
           nonce: string
           recipient_id: string | null
@@ -163,6 +196,7 @@ export type Database = {
           ciphertext: string
           conversation_id: string
           created_at?: string
+          group_id?: string
           id?: string
           nonce: string
           recipient_id?: string | null
@@ -175,6 +209,7 @@ export type Database = {
           ciphertext?: string
           conversation_id?: string
           created_at?: string
+          group_id?: string
           id?: string
           nonce?: string
           recipient_id?: string | null
@@ -208,6 +243,7 @@ export type Database = {
           id: string
           key_fingerprint: string | null
           public_key: string | null
+          read_receipts_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -218,6 +254,7 @@ export type Database = {
           id: string
           key_fingerprint?: string | null
           public_key?: string | null
+          read_receipts_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -228,6 +265,7 @@ export type Database = {
           id?: string
           key_fingerprint?: string | null
           public_key?: string | null
+          read_receipts_enabled?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -283,6 +321,7 @@ export type Database = {
     }
     Enums: {
       conversation_type: "direct" | "group"
+      message_status_kind: "delivered" | "read"
       message_type: "text" | "image" | "file" | "location"
     }
     CompositeTypes: {
@@ -412,6 +451,7 @@ export const Constants = {
   public: {
     Enums: {
       conversation_type: ["direct", "group"],
+      message_status_kind: ["delivered", "read"],
       message_type: ["text", "image", "file", "location"],
     },
   },
