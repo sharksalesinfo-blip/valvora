@@ -996,7 +996,25 @@ function ChatView() {
                 {m.failed && m.type !== "text" && (
                   <div className="text-xs italic opacity-70">{m.text}</div>
                 )}
-                <div className="text-[10px] opacity-60 text-right mt-0.5">{formatTime(m.created_at)}</div>
+                <div className="text-[10px] opacity-60 text-right mt-0.5 flex items-center justify-end gap-1">
+                  <span>{formatTime(m.created_at)}</span>
+                  {own && !m.failed && (() => {
+                    const rows = statuses.get(m.group_id) ?? [];
+                    const agg = aggregateStatus({
+                      rowsForGroup: rows,
+                      otherMemberCount: Math.max(0, members.length - 1),
+                      showRead: readReceiptsEnabled,
+                    });
+                    if (agg === "read") {
+                      return <CheckCheck className="w-3.5 h-3.5 text-sky-400" aria-label="Gelezen" />;
+                    }
+                    if (agg === "delivered") {
+                      return <CheckCheck className="w-3.5 h-3.5 opacity-80" aria-label="Afgeleverd" />;
+                    }
+                    return <Check className="w-3.5 h-3.5 opacity-80" aria-label="Verstuurd" />;
+                  })()}
+                </div>
+
               </div>
             </div>
           );
