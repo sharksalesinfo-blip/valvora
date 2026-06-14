@@ -166,6 +166,25 @@ function ChatView() {
     setLastRead(convId);
   }, [user.id, convId]);
 
+  // Eigen instelling voor leesbevestigingen (wederkerig: uit = geen 'read'
+  // schrijven én geen blauw zien van anderen).
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("profiles")
+      .select("read_receipts_enabled")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data) setReadReceiptsEnabled(data.read_receipts_enabled ?? true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+
+
   // Markeer als gelezen wanneer er nieuwe berichten binnenkomen terwijl deze chat open is.
   useEffect(() => {
     if (messages.length === 0) return;
