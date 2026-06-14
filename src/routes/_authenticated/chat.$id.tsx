@@ -389,6 +389,27 @@ function ChatView() {
       }
       const rendered = await Promise.all(unique.map(decryptOne));
       if (!cancelled) setMessages(rendered);
+      // Schrijf 'delivered' (en als zichtbaar én leesbevestigingen aan: 'read')
+      // voor binnenkomende berichten van anderen.
+      const visible =
+        typeof document !== "undefined" && document.visibilityState === "visible";
+      for (const m of unique) {
+        if (m.sender_id === user.id) continue;
+        void writeStatus({
+          groupId: m.group_id,
+          conversationId: convId,
+          userId: user.id,
+          status: "delivered",
+        });
+        if (visible && readReceiptsEnabled) {
+          void writeStatus({
+            groupId: m.group_id,
+            conversationId: convId,
+            userId: user.id,
+            status: "read",
+          });
+        }
+      }
     }
 
     void load();
@@ -406,9 +427,29 @@ function ChatView() {
             if (prev.some((p) => p.id === rendered.id)) return prev;
             return [...prev, rendered];
           });
+          // Aflevering bevestigen (en lezen als de chat open en zichtbaar is).
+          void writeStatus({
+            groupId: m.group_id,
+            conversationId: convId,
+            userId: user.id,
+            status: "delivered",
+          });
+          if (
+            typeof document !== "undefined" &&
+            document.visibilityState === "visible" &&
+            readReceiptsEnabled
+          ) {
+            void writeStatus({
+              groupId: m.group_id,
+              conversationId: convId,
+              userId: user.id,
+              status: "read",
+            });
+          }
         },
       )
       .subscribe();
+
 
     return () => {
       cancelled = true;
