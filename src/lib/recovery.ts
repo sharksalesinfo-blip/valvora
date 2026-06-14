@@ -9,7 +9,7 @@
 // Server slaat enkel ciphertext + KDF-parameters op. Zonder de code is de
 // blob niet ontsleutelbaar.
 
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 import { sodiumReady } from "./crypto";
 
 // Crockford-style base32 (32 chars, excludes I L O U for readability).

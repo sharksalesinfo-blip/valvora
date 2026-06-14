@@ -5,7 +5,7 @@
 // Een verse willekeurige nonce per bericht via randombytes_buf (NOOIT hergebruiken).
 // Nonce wordt naast de ciphertext opgeslagen (apart veld).
 
-import sodium from "libsodium-wrappers";
+import sodium from "libsodium-wrappers-sumo";
 
 let readyPromise: Promise<void> | null = null;
 export function sodiumReady(): Promise<void> {
