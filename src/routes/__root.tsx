@@ -97,6 +97,33 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "apple-touch-icon", href: "/icon-192.png" },
       { rel: "canonical", href: "https://valvora.nl" },
     ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": "https://valvora.nl/#organization",
+              name: "valvora",
+              url: "https://valvora.nl",
+              logo: "https://valvora.nl/icon-512.png",
+              description: "valvora biedt end-to-end versleutelde chat voor besloten kringen.",
+            },
+            {
+              "@type": "WebSite",
+              "@id": "https://valvora.nl/#website",
+              name: "valvora",
+              url: "https://valvora.nl",
+              description: "End-to-end versleutelde chat voor je eigen kring.",
+              inLanguage: "nl",
+              publisher: { "@id": "https://valvora.nl/#organization" },
+            },
+          ],
+        }),
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
