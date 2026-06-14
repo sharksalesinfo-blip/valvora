@@ -51,7 +51,7 @@ type RenderedMessage = {
   pending?: boolean;
 };
 
-type Member = { user_id: string; display_name: string; public_key: string | null };
+type Member = { user_id: string; display_name: string; public_key: string | null; avatar_url: string | null };
 
 async function stripExifAndCompress(file: File): Promise<Uint8Array> {
   if (!file.type.startsWith("image/")) {
@@ -109,13 +109,14 @@ function ChatView() {
       const userIds = (ms ?? []).map((m) => m.user_id);
       const { data: profs } = await supabase
         .from("profiles")
-        .select("id, display_name, public_key")
+        .select("id, display_name, public_key, avatar_url")
         .in("id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]);
       setMembers(
         (profs ?? []).map((p) => ({
           user_id: p.id,
           display_name: p.display_name,
           public_key: p.public_key,
+          avatar_url: p.avatar_url ?? null,
         })),
       );
     })();
