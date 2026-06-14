@@ -160,10 +160,16 @@ export function RecoverySection({ userId }: { userId: string }) {
             op een nieuw apparaat opnieuw inloggen met dezelfde identiteit.
             <br /><br />
             <em className="not-italic text-muted-foreground/80">
-              Let op: de code herstelt je identiteit en je contacten — niet je
-              oude berichten als die alleen op het verloren apparaat stonden.
+              Belangrijk: de code is tijdsgebonden. Hij werkt zolang je
+              opgeslagen sessie op de server nog geldig is (meestal enkele
+              weken zonder gebruik). Open de app af en toe op een vertrouwd
+              apparaat en maak na langere afwezigheid een nieuwe code aan om
+              dit venster te verlengen. Herstel zet je identiteit en contacten
+              terug — niet oude berichten die alleen op een verloren apparaat
+              stonden.
             </em>
           </p>
+
 
           {enabled === true && (
             <div className="rounded-md bg-primary/10 text-primary text-sm p-3 flex items-start gap-2">
