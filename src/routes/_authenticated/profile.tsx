@@ -74,6 +74,8 @@ function ProfilePage() {
   const [pushAvail, setPushAvail] = useState(false);
   const [pushNote, setPushNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [recoveryEnabled, setRecoveryEnabled] = useState<boolean | null>(null);
+  const fetchRecovery = useServerFn(getMyRecoveryStatus);
 
   const fetchInvite = useServerFn(getMyInvite);
   const callRotate = useServerFn(rotateInvite);
@@ -128,7 +130,8 @@ function ProfilePage() {
         }
       });
     void fetchInvite().then((r) => setInviteToken(r.token)).catch(() => undefined);
-  }, [user.id, fetchInvite]);
+    void fetchRecovery().then((s) => setRecoveryEnabled(s.enabled)).catch(() => setRecoveryEnabled(false));
+  }, [user.id, fetchInvite, fetchRecovery]);
 
   async function save() {
     const { error } = await supabase.from("profiles").update({ display_name: name }).eq("id", user.id);
