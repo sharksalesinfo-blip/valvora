@@ -30,22 +30,39 @@ function NotFoundComponent() {
   );
 }
 
+function isChunkLoadError(error: unknown): boolean {
+  const msg = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /dynamically imported module|Loading chunk|Importing a module script failed|ChunkLoadError/i.test(msg);
+}
+
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
-  useEffect(() => { reportLovableError(error, { boundary: "tanstack_root_error_component" }); }, [error]);
+  useEffect(() => {
+    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    // Stale-bundle na deploy: probeer eenmaal automatisch te herladen.
+    if (typeof window !== "undefined" && isChunkLoadError(error)) {
+      const key = "valvora:chunk-reload";
+      const last = Number(sessionStorage.getItem(key) ?? 0);
+      if (Date.now() - last > 10_000) {
+        sessionStorage.setItem(key, String(Date.now()));
+        window.location.reload();
+      }
+    }
+  }, [error]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold">Er ging iets mis</h1>
         <p className="mt-2 text-sm text-muted-foreground">Probeer het opnieuw of ga terug naar de chats.</p>
         <div className="mt-6 flex gap-2 justify-center">
-          <button onClick={() => { router.invalidate(); reset(); }} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Opnieuw</button>
+          <button onClick={() => { if (typeof window !== "undefined") window.location.reload(); else { router.invalidate(); reset(); } }} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Opnieuw</button>
           <a href="/" className="rounded-md border px-4 py-2 text-sm">Naar de chats</a>
         </div>
       </div>
     </div>
   );
 }
+
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
