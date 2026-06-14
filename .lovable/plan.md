@@ -1,34 +1,48 @@
-# Push fix: VAPID-mismatch oplossen
+# Twee aparte fixes: realtime updates + VAPID-keypair
 
-## Bewijs
-- `notify` boot werkt (VAPID_SUBJECT-fix correct).
-- FCM weigert nu elke push met `403 permission denied: invalid JWT provided`.
-- Dit is een vaste handtekening voor: privé-key ondertekent ≠ publieke key in subscription.
-- DB bevat 4 `push_subscriptions` rijen, allemaal FCM-endpoints, aangemaakt tussen 13 en 14 juni.
+## Probleem 1 — In-app: berichten verschijnen pas na navigeren
 
-## Hypothese
-Tijdens eerdere debug-rondes is `VAPID_PUBLIC_KEY` (of `_PRIVATE_KEY`) gewijzigd zonder de bijbehorende andere helft. Bestaande subscriptions zijn dan onherroepelijk ongeldig — FCM koppelt ze aan de publieke key die er op subscribe-moment was, en die kun je server-side niet "matchen" door alleen secrets te wijzigen.
+### Diagnose
+`chats.tsx` en `chat.$id.tsx` hebben realtime-listeners op `postgres_changes` voor `messages` en `conversation_members`. Code is bedraad, dus events komen óf niet binnen óf de listener subscribet niet succesvol. Drie mogelijke oorzaken, te controleren in deze volgorde:
 
-## Stappen
+1. **Realtime publication** staat niet aan voor de betrokken tabellen. Postgres' logische replicatie stuurt alleen events voor tabellen in `supabase_realtime` publication. Check: `SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime'`. Als `messages` / `conversation_members` ontbreken → toevoegen via migratie: `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages, public.conversation_members`.
 
-### 1. Verifieer of huidige keypair geldig is
-Lees beide secrets server-side en check of `VAPID_PUBLIC_KEY` de bijbehorende publieke punt is van `VAPID_PRIVATE_KEY` (web-push kan dit valideren). Twee uitkomsten:
+2. **Subscribe-status** wordt nu niet gelogd. Toevoegen: `.subscribe((status) => console.log("realtime", status))` in beide kanalen — zo zien we direct `SUBSCRIBED` of een fout. Tijdelijk voor diagnose, of permanent als debug-only.
 
-- **Keypair klopt** → ga naar stap 2 (alleen subscriptions zijn stale).
-- **Keypair klopt niet** → vraag de gebruiker welke kant juist is. Als geen van beide bekend is: genereer een vers keypair, vervang beide secrets, ga naar stap 2.
+3. **RLS-pad voor realtime**. Realtime evalueert RLS als de ingelogde gebruiker. Als `messages` SELECT-policy via een complexe join op `conversation_members` loopt, kan het event afgewezen worden. Lossen we alleen op als 1 en 2 niet de oorzaak zijn.
 
-### 2. Stale subscriptions opruimen
-`DELETE FROM push_subscriptions` (alle 4 rijen). Ze zijn permanent ongeldig — `notify` ruimt 404/410 op, maar 403 blijft komen tot ze handmatig weg zijn.
+### Stappen
+- Stap A: query `pg_publication_tables`, kijk welke tabellen erin zitten.
+- Stap B: als `messages` / `conversation_members` ontbreken → één migratie die ze toevoegt aan `supabase_realtime`.
+- Stap C: één kort debug-logje in de subscribe-callback in beide files om vast te leggen of de connectie succesvol is. Verwijderen na verificatie.
 
-### 3. Verse subscription maken op het toestel
-Gebruiker zet meldingen op de PWA één keer uit en weer aan (zodat `subscribePush` opnieuw draait met de juiste actuele publieke key). Stuur dan een testbericht en bevestig in de `notify`-logs dat het 201 wordt i.p.v. 403.
+### Wat dit NIET aanraakt
+- Geen wijziging aan de berichten-encryptie of de send-flow.
+- Geen wijziging aan RLS-policies tenzij stap A en B het probleem niet zijn.
+- Geen wijziging aan TanStack Query of routerstructuur.
 
-## Code dat aangeraakt wordt
-- Nieuw eenmalig server-route of `createServerFn` voor het verifiëren van de keypair (puur diagnose, geen runtime-gedrag).
-- Geen wijzigingen aan `src/lib/push.ts`, de service worker, de `notify` edge function logica, of de subscribe-flow zelf.
-- Geen wijzigingen aan crypto, RLS, of berichten-flow.
+---
 
-## Wat dit NIET doet
-- Geen rotatie van VAPID-keys tenzij stap 1 aantoont dat ze stuk zijn.
-- Geen wijziging aan de neutrale push-payload.
-- Geen poging om "oude" subscriptions te repareren — dat kan niet, alleen opnieuw aanmaken.
+## Probleem 2 — Push: VAPID-keypair is stuk
+
+### Diagnose
+- 07:49:09 verse subscription gemaakt na toggle uit/aan.
+- 07:49:28 + 07:50:32 server probeert push → `403 invalid JWT`.
+- Conclusie: `VAPID_PUBLIC_KEY` (client krijgt deze, browser bakt 'm in subscription) en `VAPID_PRIVATE_KEY` (server ondertekent JWT) horen niet bij elkaar.
+
+### Stappen
+- Genereer een vers VAPID-keypair (web-push standaard, P-256, base64url-encoded). Eenmalig lokaal met een kleine Node-script via `code--exec`.
+- Vraag de gebruiker beide secrets te updaten in één keer via de secrets-tool: `VAPID_PUBLIC_KEY` en `VAPID_PRIVATE_KEY`.
+- Verwijder de bestaande 1 stale subscription in `push_subscriptions` (gemaakt met de verkeerde publieke key).
+- Gebruiker toggle meldingen één keer uit/aan op het toestel → verse subscription met de nieuwe publieke key.
+- Stuur testbericht, verifieer `notify`-logs: `201` in plaats van `403`.
+
+### Wat dit NIET aanraakt
+- Geen wijziging aan de `notify` edge function code.
+- Geen wijziging aan `src/lib/push.ts` of de service worker.
+- Geen wijziging aan VAPID_SUBJECT (staat goed).
+
+---
+
+## Volgorde
+Eerst probleem 1 (realtime) want dat is wat je nu in de app raakt. Probleem 2 (push) daarna in een aparte ronde. Beide los oppakken houdt de blast radius klein.
