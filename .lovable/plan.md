@@ -1,52 +1,32 @@
-# Fork-veiligheid: scan, checklist, opstartcheck
+## Wijzigingen
 
-Drie onderdelen, in volgorde. **A wordt eerst gedraaid en gerapporteerd** voor B/C wordt geïmplementeerd, want als A iets vindt verandert de prioriteit (rotatie + historie opschonen voor publicatie).
+### 1. Nieuw bestand `src/lib/inbox-delivery.ts`
+Eén helper die alles bundelt:
+- `catchUpDelivered(userId, limit=100)` — query de recentste 100 berichten waar `recipient_id = me` en `sender_id != me`, en roep `writeStatus(..., "delivered")` aan per groep. `writeStatus` is al idempotent (PK-conflict op `(group_id, user_id, status)` wordt stil geslikt), dus dubbele rijen kunnen niet ontstaan.
+- `installInboxDeliveryTracker(userId)` — installeert:
+  1. directe inhaalslag bij mount,
+  2. realtime kanaal `inbox:${userId}` met filter `recipient_id=eq.<userId>` op `messages` → `writeStatus` delivered (skip eigen kopie),
+  3. `visibilitychange` + `focus` listener → opnieuw `catchUpDelivered` bij resume,
+  4. retourneert cleanup die het kanaal verwijdert en listeners afmeldt.
 
-## A. Secret-scan van de volledige git-historie
+### 2. `src/routes/_authenticated/route.tsx`
+Eén `useEffect` toevoegen die `installInboxDeliveryTracker(user.id)` mount zolang de gebruiker is ingelogd. Cleanup ruimt het kanaal op bij uitloggen/unmount. Geplaatst naast de bestaande `installBadgeResetOnForeground`-effect.
 
-Doel: bewijzen dat de repo veilig publiek kan, niet alleen dat de huidige working tree schoon is.
+### 3. `src/routes/_authenticated/chats.tsx`
+Eenmalig `void catchUpDelivered(user.id)` aanroepen in het bestaande mount-effect (regel 87). Lichte extra dekking voor openen-vanuit-koud naast de globale tracker; vrijwel gratis omdat het dezelfde idempotente helper is.
 
-Aanpak:
-1. `gitleaks` draaien via `nix run nixpkgs#gitleaks -- detect --source . --log-opts="--all" --redact --report-format json --report-path /tmp/gitleaks.json` — scant alle commits op alle refs met de standaard rule-set (AWS, GCP, generic API keys, private keys, JWTs, etc.).
-2. Aanvullend gerichte `git log -p --all -S<naam>` voor de namen die specifiek voor dit project gevoelig zijn: `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `SUPABASE_SECRET_KEYS`, `SUPABASE_JWKS`, `VAPID_PRIVATE_KEY`, `LOVABLE_API_KEY`, en patronen `BEGIN PRIVATE KEY`, `service_role`, `eyJ` (JWT-prefix in waardes, niet imports).
-3. Working tree apart bevestigen: `.env` inhoud (alleen `VITE_*` + publishable mag), plus zoeken naar `.env.local`, `.env.production`, `*.sql.dump`, `*.backup`, seed-bestanden met echte data.
-4. Rapportage in chat per bevinding: secret-type, commit-hash(es), pad, of het nog in HEAD staat, ernst.
-
-Bij KRITIEK (een echte secret in historie): **stoppen, melden, niet zelf `git filter-repo` draaien**. Advies wordt dan: betreffende key direct roteren (service-role via `supabase--rotate_api_keys`, VAPID handmatig, LOVABLE_API_KEY via `ai_gateway--rotate_lovable_api_key`), repo niet publiek/forkbaar maken tot historie is opgeschoond, en bevestiging vragen voor de history-rewrite.
-
-Bij schoon: dat expliciet rapporteren met aantal gescande commits.
-
-## B. Fork-checklist in `SECURITY.md` sectie 4 + nieuwe `README.md`
-
-`SECURITY.md` sectie 4 ("Self-hosting / forken") wordt bovenaan uitgebreid met een genummerde checklist (1‑5 zoals in de opdracht: eigen backend, eigen VAPID, vereisten-die-stil-falen-verwijzing, branding/SEO-bestanden om aan te passen, licentie + herkomstmelding). De bestaande detail-tekst over `libsodium-wrappers-sumo`, anonymous sign-in, `VAPID_SUBJECT`, edge functions, buckets en migraties blijft staan als referentie achter de checklist.
-
-`README.md` bestaat nog niet in de repo — die wordt aangemaakt met: korte projectbeschrijving, link naar `SECURITY.md`, en **prominent bovenaan de installatie-sectie** dezelfde 5-puntenchecklist (met expliciete waarschuwing dat punt 1 niet-overslaan-baar is). Inclusief een zin "Dit is een fork van X; niet de officiële instance" als template voor forkers, en een licentie-keuze-prompt (voorstel: MIT of AGPL-3.0; ik vraag welke voor we het bestand vastleggen).
-
-Geen wijzigingen aan crypto, RLS, notify-payload, of bestaande migraties.
-
-## C. Onderzoek: opstartcheck tegen de originele backend-URL
-
-**Voorgestelde aanpak (nog niet implementeren — wacht op akkoord):**
-
-Een constante `ORIGINAL_INSTANCE_SUPABASE_URL = "https://xxddqmrwejrkpmpzlbtg.supabase.co"` (de huidige `VITE_SUPABASE_URL`) en een opt-in vlag `VITE_IS_ORIGINAL_INSTANCE=true` in `.env`. Bij app-start (in `src/start.ts` of `__root.tsx`):
-
-- Als `VITE_SUPABASE_URL === ORIGINAL_INSTANCE_SUPABASE_URL` **en** `VITE_IS_ORIGINAL_INSTANCE !== "true"` → fullscreen blokpagina met uitleg "Je draait een fork tegen de originele valvora-backend. Vervang `VITE_SUPABASE_URL` en `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env` met je eigen project, of zet `VITE_IS_ORIGINAL_INSTANCE=true` als jij de eigenaar bent."
-- De officiële instance zet `VITE_IS_ORIGINAL_INSTANCE=true` in zijn eigen `.env` (eenmalig, nu meteen) en wordt dus nooit geblokkeerd.
-- Werkt build-tijd én runtime (Vite `import.meta.env`), is in 30 seconden uit te zetten door een forker die zijn eigen URL invult — dus niet vijandig — en vangt de meest waarschijnlijke fout (`.env` vergeten te overschrijven) keihard af.
-
-Valkuilen / overwegingen ter bespreking:
-- De originele URL komt zo expliciet in de broncode te staan. Dat is geen secret (staat al in elke gepubliceerde build), maar wel zichtbaar — prima volgens mij.
-- Een kwaadwillende forker kan de check verwijderen. Niet te voorkomen; doel is ongeluk afvangen, niet sabotage.
-- Alternatief lichter: alleen een `console.warn` + toast i.p.v. blokpagina. Voorstel: blokpagina, want een waarschuwing wordt genegeerd.
-
-Implementatie pas na expliciet "ja, bouw C in" — en ik zet dan ook meteen `VITE_IS_ORIGINAL_INSTANCE=true` in deze `.env` zodat de productie-instance niet zichzelf blokkeert.
-
-## Volgorde van uitvoering
-
-1. A draaien en rapporteren. Bij KRITIEK: stoppen.
-2. B doorvoeren (vraag eerst: welke licentie?).
-3. C: aanpak bevestigen, dan inbouwen.
+### 4. `SECURITY.md` sectie 2 (regel 31)
+Eén zin toevoegen: "`delivered` wordt naast in het chatscherm ook geschreven door een globale inbox-listener en een resume-inhaalslag bij visibility/focus — nog steeds zonder berichtinhoud, nog steeds pure metadata."
 
 ## Niet aanraken
+- `src/lib/message-status.ts` — `aggregateStatus` borgt al dat `read` impliceert `delivered` (regel 56: bij een `read`-rij wordt `user_id` óók aan de `delivered`-set toegevoegd). Geen wijziging nodig; rangorde sent < delivered < read blijft intact.
+- `showRead` / wederkerige leesbevestiging-logica.
+- Bestaande `chat:${convId}`-handler en `markVisibleAsRead`-effect in `chat.$id.tsx` — die blijven `read` schrijven zodra de chat zichtbaar is. Volgorde delivered-vóór-read wordt gegarandeerd doordat `read` `delivered` impliceert in de aggregator, en doordat het chatscherm sowieso altijd óók `delivered` schrijft vóór `read` in dezelfde handler (regels 434–451).
+- RLS, crypto, sleutelopslag, push-payload, service worker (stap 3 bewust overgeslagen).
 
-`src/lib/crypto.ts`, `src/lib/recovery.ts`, RLS-policies, `supabase/functions/notify/index.ts`-payload, `src/integrations/supabase/*` autogen.
+## Verificatie na implementatie
+Per testpunt 1–5 uit de opdracht PASS/FAIL rapporteren, met expliciete bevestiging dat:
+- de wederkerige `showRead`-logica intact is,
+- stap 3 (SW-delivered) bewust niet is geïmplementeerd.
+
+Geen migratie nodig — schema en RLS van `message_status` blijven ongewijzigd.
