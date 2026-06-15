@@ -286,10 +286,13 @@ function ChatView() {
   }, [convId, otherMembers]);
 
   // Berichten laden + realtime
+  const lastCreatedAtRef = useRef<string>("");
   useEffect(() => {
     if (!privKey) return;
     let cancelled = false;
     const imageBlobUrls: string[] = [];
+    const seenIds = new Set<string>();
+    const seenKeys = new Set<string>();
 
     async function decryptOne(m: DbMessage): Promise<RenderedMessage> {
       try {
@@ -337,7 +340,6 @@ function ChatView() {
               file: { ...env.file, name: env.file.name ?? "afbeelding.jpg", path: m.attachment_path },
             };
           }
-          // file: keep decrypted bytes available via blob URL on-demand
           const blob = new Blob([plainBytes.buffer as ArrayBuffer], { type: env.file.mime || "application/octet-stream" });
           const url = URL.createObjectURL(blob);
           imageBlobUrls.push(url);
@@ -371,45 +373,77 @@ function ChatView() {
       }
     }
 
+    function markStatuses(m: DbMessage) {
+      if (m.sender_id === user.id) return;
+      void writeStatus({
+        groupId: m.group_id,
+        conversationId: convId,
+        userId: user.id,
+        status: "delivered",
+      });
+      const visible =
+        typeof document !== "undefined" && document.visibilityState === "visible";
+      if (visible && readReceiptsEnabled) {
+        void writeStatus({
+          groupId: m.group_id,
+          conversationId: convId,
+          userId: user.id,
+          status: "read",
+        });
+      }
+    }
+
+    async function ingest(rows: DbMessage[], initial: boolean) {
+      const unique: DbMessage[] = [];
+      for (const m of rows) {
+        if (m.recipient_id !== user.id) continue;
+        if (seenIds.has(m.id)) continue;
+        const k = `${m.sender_id}-${m.created_at}-${m.type}`;
+        if (seenKeys.has(k)) continue;
+        seenIds.add(m.id);
+        seenKeys.add(k);
+        unique.push(m);
+        if (m.created_at > lastCreatedAtRef.current) {
+          lastCreatedAtRef.current = m.created_at;
+        }
+      }
+      if (unique.length === 0) return;
+      const rendered = await Promise.all(unique.map(decryptOne));
+      if (cancelled) return;
+      if (initial) {
+        setMessages(rendered);
+      } else {
+        setMessages((prev) => {
+          const have = new Set(prev.map((p) => p.id));
+          const add = rendered.filter((r) => !have.has(r.id));
+          if (add.length === 0) return prev;
+          return [...prev, ...add].sort((a, b) =>
+            a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0,
+          );
+        });
+      }
+      for (const m of unique) markStatuses(m);
+    }
+
     async function load() {
       const { data } = await supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", convId)
         .order("created_at", { ascending: true });
-      const rows = (data as DbMessage[]) ?? [];
-      const seen = new Set<string>();
-      const unique: DbMessage[] = [];
-      for (const m of rows) {
-        if (m.recipient_id !== user.id) continue;
-        const k = `${m.sender_id}-${m.created_at}-${m.type}`;
-        if (seen.has(k)) continue;
-        seen.add(k);
-        unique.push(m);
-      }
-      const rendered = await Promise.all(unique.map(decryptOne));
-      if (!cancelled) setMessages(rendered);
-      // Schrijf 'delivered' (en als zichtbaar én leesbevestigingen aan: 'read')
-      // voor binnenkomende berichten van anderen.
-      const visible =
-        typeof document !== "undefined" && document.visibilityState === "visible";
-      for (const m of unique) {
-        if (m.sender_id === user.id) continue;
-        void writeStatus({
-          groupId: m.group_id,
-          conversationId: convId,
-          userId: user.id,
-          status: "delivered",
-        });
-        if (visible && readReceiptsEnabled) {
-          void writeStatus({
-            groupId: m.group_id,
-            conversationId: convId,
-            userId: user.id,
-            status: "read",
-          });
-        }
-      }
+      await ingest((data as DbMessage[]) ?? [], true);
+    }
+
+    async function catchUp() {
+      const since = lastCreatedAtRef.current;
+      let q = supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", convId)
+        .order("created_at", { ascending: true });
+      if (since) q = q.gt("created_at", since);
+      const { data } = await q;
+      await ingest((data as DbMessage[]) ?? [], false);
     }
 
     void load();
@@ -420,47 +454,31 @@ function ChatView() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${convId}` },
         async (payload) => {
-          const m = payload.new as DbMessage;
-          if (m.recipient_id !== user.id) return;
-          const rendered = await decryptOne(m);
-          setMessages((prev) => {
-            if (prev.some((p) => p.id === rendered.id)) return prev;
-            return [...prev, rendered];
-          });
-          // Statussen alleen schrijven voor berichten van anderen — niet voor
-          // de eigen-kopie van wat jij zelf verstuurt (anders direct blauw).
-          if (m.sender_id === user.id) return;
-          // Aflevering bevestigen (en lezen als de chat open en zichtbaar is).
-          void writeStatus({
-            groupId: m.group_id,
-            conversationId: convId,
-            userId: user.id,
-            status: "delivered",
-          });
-          if (
-            typeof document !== "undefined" &&
-            document.visibilityState === "visible" &&
-            readReceiptsEnabled
-          ) {
-            void writeStatus({
-              groupId: m.group_id,
-              conversationId: convId,
-              userId: user.id,
-              status: "read",
-            });
-          }
+          await ingest([payload.new as DbMessage], false);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void catchUp();
+      });
 
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void catchUp();
+      }
+    };
+    const onFocus = () => void catchUp();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
       supabase.removeChannel(ch);
       imageBlobUrls.forEach((u) => URL.revokeObjectURL(u));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convId, privKey, memberById, user.id]);
+  }, [convId, privKey, memberById, user.id, readReceiptsEnabled]);
 
   // Auto-scroll
   useEffect(() => {
@@ -468,22 +486,54 @@ function ChatView() {
   }, [messages.length]);
 
   // Aflever-/leesstatussen laden + realtime updates voor dit gesprek.
+  const lastStatusAtRef = useRef<string>("");
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    function mergeRow(r: StatusRow) {
+      setStatuses((prev) => {
+        const arr = prev.get(r.group_id) ?? [];
+        if (arr.some((x) => x.user_id === r.user_id && x.status === r.status)) return prev;
+        const next = new Map(prev);
+        next.set(r.group_id, [...arr, { group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at }]);
+        return next;
+      });
+      if (r.at && r.at > lastStatusAtRef.current) {
+        lastStatusAtRef.current = r.at;
+      }
+    }
+
+    async function loadInitial() {
       const { data } = await supabase
         .from("message_status")
         .select("group_id, user_id, status, at")
         .eq("conversation_id", convId);
       if (cancelled || !data) return;
       const map = new Map<string, StatusRow[]>();
+      let maxAt = "";
       for (const r of data as StatusRow[]) {
         const arr = map.get(r.group_id) ?? [];
         arr.push(r);
         map.set(r.group_id, arr);
+        if (r.at && r.at > maxAt) maxAt = r.at;
       }
       setStatuses(map);
-    })();
+      if (maxAt) lastStatusAtRef.current = maxAt;
+    }
+
+    async function catchUpStatuses() {
+      const since = lastStatusAtRef.current;
+      let q = supabase
+        .from("message_status")
+        .select("group_id, user_id, status, at")
+        .eq("conversation_id", convId);
+      if (since) q = q.gt("at", since);
+      const { data } = await q;
+      if (cancelled || !data) return;
+      for (const r of data as StatusRow[]) mergeRow(r);
+    }
+
+    void loadInitial();
 
     const ch = supabase
       .channel(`status:${convId}`)
@@ -497,19 +547,26 @@ function ChatView() {
         },
         (payload) => {
           const r = payload.new as StatusRow & { conversation_id: string };
-          setStatuses((prev) => {
-            const arr = prev.get(r.group_id) ?? [];
-            if (arr.some((x) => x.user_id === r.user_id && x.status === r.status)) return prev;
-            const next = new Map(prev);
-            next.set(r.group_id, [...arr, { group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at }]);
-            return next;
-          });
+          mergeRow({ group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void catchUpStatuses();
+      });
+
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void catchUpStatuses();
+      }
+    };
+    const onFocus = () => void catchUpStatuses();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
       void supabase.removeChannel(ch);
     };
   }, [convId]);
