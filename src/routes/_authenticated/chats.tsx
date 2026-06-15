@@ -5,6 +5,7 @@ import { formatTime } from "@/lib/format";
 import { Plus, Users, ShieldCheck } from "lucide-react";
 import { AvatarCircle } from "@/components/avatar-circle";
 import { isUnread } from "@/lib/unread";
+import { catchUpDelivered } from "@/lib/inbox-delivery";
 
 
 export const Route = createFileRoute("/_authenticated/chats")({
@@ -85,6 +86,8 @@ function ChatsPage() {
 
   useEffect(() => {
     void load();
+    // Lichte inhaalslag voor `delivered` bij openen-vanuit-koud van de chatlijst.
+    void catchUpDelivered(user.id);
     void supabase
       .from("profiles")
       .select("display_name, avatar_url")

@@ -28,7 +28,7 @@ valvora is gebouwd voor besloten kringen (familie, vrienden, vaste teams). Het i
   - contactenlijst en geverifieerd-status (`contacts`, `contact_verifications`)
   - push-subscription endpoints (`push_subscriptions`)
   - groepsnamen (voor type=group conversations)
-  - **aflever- en leesstatus per bericht** (`message_status`): welk bericht (group_id), welke ontvanger, welk tijdstip en welk niveau (afgeleverd of gelezen). Dit zegt iets over wie wanneer online was en wie wanneer las — bewust benoemd als uitbreiding van de metadata-grens.
+  - **aflever- en leesstatus per bericht** (`message_status`): welk bericht (group_id), welke ontvanger, welk tijdstip en welk niveau (afgeleverd of gelezen). Dit zegt iets over wie wanneer online was en wie wanneer las — bewust benoemd als uitbreiding van de metadata-grens. `delivered` wordt naast in het chatscherm ook geschreven door een globale inbox-listener en een resume-inhaalslag bij visibility/focus — nog steeds zonder berichtinhoud, nog steeds pure metadata.
 
   **Inhoud van berichten en bestanden is dat niet** — alleen ciphertext + nonce staat op de server.
 

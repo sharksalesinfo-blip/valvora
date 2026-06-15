@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { OnboardingPrompt } from "@/components/onboarding-prompt";
 import { FirstRunWelcome } from "@/components/first-run-welcome";
 import { installBadgeResetOnForeground } from "@/lib/badge";
+import { installInboxDeliveryTracker } from "@/lib/inbox-delivery";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -60,6 +61,10 @@ function AuthedLayout() {
   }, [user.id, join, nav]);
 
   useEffect(() => installBadgeResetOnForeground(), []);
+
+  // Globale aflever-tracker — schrijft `delivered` voor binnenkomende berichten
+  // ongeacht het scherm waarop de gebruiker staat (stap 1+2 van de fix).
+  useEffect(() => installInboxDeliveryTracker(user.id), [user.id]);
 
   if (!ready) {
     return (
