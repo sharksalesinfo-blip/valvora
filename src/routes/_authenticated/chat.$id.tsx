@@ -486,22 +486,54 @@ function ChatView() {
   }, [messages.length]);
 
   // Aflever-/leesstatussen laden + realtime updates voor dit gesprek.
+  const lastStatusAtRef = useRef<string>("");
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    function mergeRow(r: StatusRow) {
+      setStatuses((prev) => {
+        const arr = prev.get(r.group_id) ?? [];
+        if (arr.some((x) => x.user_id === r.user_id && x.status === r.status)) return prev;
+        const next = new Map(prev);
+        next.set(r.group_id, [...arr, { group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at }]);
+        return next;
+      });
+      if (r.at && r.at > lastStatusAtRef.current) {
+        lastStatusAtRef.current = r.at;
+      }
+    }
+
+    async function loadInitial() {
       const { data } = await supabase
         .from("message_status")
         .select("group_id, user_id, status, at")
         .eq("conversation_id", convId);
       if (cancelled || !data) return;
       const map = new Map<string, StatusRow[]>();
+      let maxAt = "";
       for (const r of data as StatusRow[]) {
         const arr = map.get(r.group_id) ?? [];
         arr.push(r);
         map.set(r.group_id, arr);
+        if (r.at && r.at > maxAt) maxAt = r.at;
       }
       setStatuses(map);
-    })();
+      if (maxAt) lastStatusAtRef.current = maxAt;
+    }
+
+    async function catchUpStatuses() {
+      const since = lastStatusAtRef.current;
+      let q = supabase
+        .from("message_status")
+        .select("group_id, user_id, status, at")
+        .eq("conversation_id", convId);
+      if (since) q = q.gt("at", since);
+      const { data } = await q;
+      if (cancelled || !data) return;
+      for (const r of data as StatusRow[]) mergeRow(r);
+    }
+
+    void loadInitial();
 
     const ch = supabase
       .channel(`status:${convId}`)
@@ -515,19 +547,26 @@ function ChatView() {
         },
         (payload) => {
           const r = payload.new as StatusRow & { conversation_id: string };
-          setStatuses((prev) => {
-            const arr = prev.get(r.group_id) ?? [];
-            if (arr.some((x) => x.user_id === r.user_id && x.status === r.status)) return prev;
-            const next = new Map(prev);
-            next.set(r.group_id, [...arr, { group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at }]);
-            return next;
-          });
+          mergeRow({ group_id: r.group_id, user_id: r.user_id, status: r.status, at: r.at });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void catchUpStatuses();
+      });
+
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void catchUpStatuses();
+      }
+    };
+    const onFocus = () => void catchUpStatuses();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
       void supabase.removeChannel(ch);
     };
   }, [convId]);
