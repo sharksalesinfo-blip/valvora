@@ -327,11 +327,13 @@ function ProfilePage() {
 
         <section className="bg-card border rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <AtSign className="w-4 h-4 text-primary" /> Handle
+            <AtSign className="w-4 h-4 text-primary" /> Handle (gebruikersnaam)
           </div>
           <p className="text-xs text-muted-foreground">
-            Een unieke naam waarmee mensen je kunnen vinden, bijvoorbeeld als de
-            invite-link niet bij de hand is. 3–20 tekens: letters, cijfers of _.
+            Kies een handle zodat anderen jou kunnen toevoegen via <span className="font-medium">Nieuw → Toevoegen op handle</span> door <span className="font-mono">@jouwnaam</span> in te typen. Zonder handle ben je alleen te bereiken via je invite-link hieronder.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            3–20 tekens: letters, cijfers of <span className="font-mono">_</span>. Hoofdletters maken niet uit. Vergeet niet op <span className="font-medium">Opslaan</span> te tikken.
           </p>
           <div className="flex gap-2">
             <div className="relative flex-1">
