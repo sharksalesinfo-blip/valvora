@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX profiles_handle_unique_ci ON public.profiles (lower(handle)) WHERE handle IS NOT NULL;
